@@ -1,0 +1,53 @@
+commit c344c60d7d9553e115995f6d4bd21a230a4ae853
+Author: cborntra <cborntra@8f6e269a-dfd6-0310-a8e1-e2731360e62c>
+Date:   Mon Oct 15 14:03:20 2012 +0000
+
+    check in ltg jhe fix. Fixes https://bugs.kde.org/show_bug.cgi?id=308427
+    
+    
+    git-svn-id: svn://svn.valgrind.org/vex/trunk@2551 8f6e269a-dfd6-0310-a8e1-e2731360e62c
+
+diff --git a/VEX/priv/guest_s390_helpers.c b/VEX/priv/guest_s390_helpers.c
+index 75f4021..66f05fe 100644
+--- a/VEX/priv/guest_s390_helpers.c
++++ b/VEX/priv/guest_s390_helpers.c
+@@ -1522,7 +1522,11 @@ guest_s390x_spechelper(HChar *function_name, IRExpr **args,
+             return unop(Iop_1Uto32, binop(Iop_CmpLT64S, mkU64(0), cc_dep1));
+          }
+          if (cond == 8 + 2 || cond == 8 + 2 + 1) {
+-            return unop(Iop_1Uto32, binop(Iop_CmpLE64S, mkU64(0), cc_dep1));
++            /* special case =0 || >0 to handle some gcc magic that only checks
++             * the first bit. Fixes 308427
++             */
++            return unop(Iop_64to32, binop(Iop_Xor64, binop(Iop_Shr64,cc_dep1,mkU8(63)),
++                      mkU64(1)));
+          }
+          if (cond == 8 + 4 + 2 || cond == 8 + 4 + 2 + 1) {
+             return mkU32(1);
+
+commit d1d90974d5239151892742b11dd26cf12055aade
+Author: cborntra <cborntra@8f6e269a-dfd6-0310-a8e1-e2731360e62c>
+Date:   Thu Feb 5 11:05:10 2015 +0000
+
+    Fix bug 343802. We need to handle one more special case in the spechelper
+    
+    
+    git-svn-id: svn://svn.valgrind.org/vex/trunk@3083 8f6e269a-dfd6-0310-a8e1-e2731360e62c
+
+diff --git a/VEX/priv/guest_s390_helpers.c b/VEX/priv/guest_s390_helpers.c
+index 78ca2ef..df1f24b 100644
+--- a/VEX/priv/guest_s390_helpers.c
++++ b/VEX/priv/guest_s390_helpers.c
+@@ -1958,7 +1958,10 @@ guest_s390x_spechelper(const HChar *function_name, IRExpr **args,
+             return unop(Iop_1Uto32, binop(Iop_CmpNE64, cc_dep1, mkU64(0)));
+          }
+          if (cond == 4 || cond == 4 + 1) {
+-            return unop(Iop_1Uto32, binop(Iop_CmpLT64S, cc_dep1, mkU64(0)));
++             /* Special case cc_dep < 0. Only check the MSB to avoid bogus
++               memcheck complaints due to gcc magic. Fixes 343802
++             */
++            return unop(Iop_64to32, binop(Iop_Shr64, cc_dep1, mkU8(63)));
+          }
+          if (cond == 8 + 4 || cond == 8 + 4 + 1) {
+             return unop(Iop_1Uto32, binop(Iop_CmpLE64S, cc_dep1, mkU64(0)));
+

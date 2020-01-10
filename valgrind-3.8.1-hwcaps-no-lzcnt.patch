@@ -1,0 +1,13 @@
+--- valgrind/VEX/priv/main_main.c.orig	2014-11-03 20:15:32.647070331 +0100
++++ valgrind/VEX/priv/main_main.c	2014-11-03 20:12:04.772687750 +0100
+@@ -1147,6 +1147,10 @@
+            | VEX_HWCAPS_AMD64_BMI:
+          return "amd64-sse3-cx16-lzcnt-avx-bmi";
+       case VEX_HWCAPS_AMD64_SSE3 | VEX_HWCAPS_AMD64_CX16
++           | VEX_HWCAPS_AMD64_AVX
++           | VEX_HWCAPS_AMD64_BMI | VEX_HWCAPS_AMD64_AVX2:
++         return "amd64-sse3-cx16-avx2-bmi";
++      case VEX_HWCAPS_AMD64_SSE3 | VEX_HWCAPS_AMD64_CX16
+            | VEX_HWCAPS_AMD64_LZCNT | VEX_HWCAPS_AMD64_AVX
+            | VEX_HWCAPS_AMD64_BMI | VEX_HWCAPS_AMD64_AVX2:
+          return "amd64-sse3-cx16-lzcnt-avx2-bmi";

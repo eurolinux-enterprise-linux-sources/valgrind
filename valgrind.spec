@@ -3,7 +3,7 @@
 Summary: Tool for finding memory management bugs in programs
 Name: %{?scl_prefix}valgrind
 Version: 3.8.1
-Release: 3.7%{?dist}
+Release: 8%{?dist}
 Epoch: 1
 License: GPLv2
 URL: http://www.valgrind.org/
@@ -118,9 +118,7 @@ Patch26: valgrind-3.8.1-gdbserver_exit.patch
 # KDE#164485 - VG_N_SEGNAMES and VG_N_SEGMENTS are (still) too small
 Patch27: valgrind-3.8.1-aspacemgr_VG_N_SEGs.patch
 
-# KDE#308427 - s390 memcheck reports tsearch conditional jump or move
-#              depends on uninitialized value [workaround, suppression]
-Patch28: valgrind-3.8.1-s390_tsearch_supp.patch
+# Patch28 was a workaround, real fix is in Patch42.
 
 # KDE#307106 - unhandled instruction bytes: f0 0f c0 02 (lock xadd)
 Patch29: valgrind-3.8.1-xaddb.patch
@@ -151,6 +149,29 @@ Patch37: valgrind-3.8.1-bcopy.patch
 
 # KDE#308089 - Enable prctl on ppc64-linux.
 Patch38: valgrind-3.8.1-ppc64-prctl.patch
+
+# Recognize and warn about usage of old (broken) ppc32 magic instr preamble.
+# https://bugs.kde.org/show_bug.cgi?id=278808#c6
+Patch39: valgrind-3.8.1-ppc32-instr-magic.patch
+
+# RHBZ#1158802 Handle AVX2 without lzcnt cpu flag (fixed upstream in 3.9.0+)
+Patch40: valgrind-3.8.1-hwcaps-no-lzcnt.patch
+
+# KDE#333501 Cache set count is not a power of two
+Patch41: valgrind-3.8.1-llcache-size.patch
+
+# KDE#308427 - s390 memcheck reports tsearch conditional jump or move
+# KDE#343802 - s390x memcheck reports spurious conditional jump
+Patch42: valgrind-3.8.1-s390-spechelper.patch
+
+# KDE#303536 - ioctl for SIOCETHTOOL (ethtool(8)) isn't wrapped
+Patch43: valgrind-3.8.1-ethtool.patch
+
+# KDE#331830 - ppc64: WARNING: unhandled syscall: 96/97
+Patch44: valgrind-3.8.1-ppc64-priority.patch
+
+# KDE#333666 - Recognize MPX instructions and bnd prefix.
+Patch45: valgrind-3.8.1-mpx.patch
 
 Obsoletes: valgrind-callgrind
 %ifarch x86_64 ppc64
@@ -277,9 +298,7 @@ touch ./none/tests/amd64/bmi.stderr.exp
 %patch25 -p1
 %patch26 -p1
 %patch27 -p1
-%ifarch s390x
-%patch28 -p1
-%endif
+# patch28 was a workaround, patch42 is the actual fix.
 
 %patch29 -p1
 
@@ -292,6 +311,13 @@ touch ./none/tests/amd64/bmi.stderr.exp
 %patch36 -p1
 %patch37 -p1
 %patch38 -p1
+%patch39 -p1
+%patch40 -p1
+%patch41 -p1
+%patch42 -p1
+%patch43 -p1
+%patch44 -p1
+%patch45 -p1
 
 # To suppress eventual automake warnings/errors
 rm -f gdbserver_tests/filter_gdb.orig
@@ -441,6 +467,25 @@ echo ===============END TESTING===============
 %endif
 
 %changelog
+* Wed Feb 25 2015 Mark Wielaard <mjw@redhat.com> - 3.8.1-8
+- Add valgrind-3.8.1-mpx.patch (#1196273)
+
+* Mon Feb 16 2015 Mark Wielaard <mjw@redhat.com> - 3.8.1-7
+- Add valgrind-3.8.1-ethtool.patch. (#1191404)
+- Add valgrind-3.8.1-ppc64-priority.patch. (#1191414)
+
+* Thu Feb 05 2015 Mark Wielaard <mjw@redhat.com> - 3.8.1-6
+- Add valgrind-3.10-s390-spechelper.patch. (#1133040)
+
+* Thu Feb 05 2015 Mark Wielaard <mjw@redhat.com> 3.8.1-5
+- Add tests filter to valgrind-3.8.1-llcache-size.patch. (#1163777)
+- Add valgrind.h update to valgrind-3.8.1-ppc32-instr-magic.patch. (#1142151)
+
+* Wed Feb 04 2015 Mark Wielaard <mjw@redhat.com> 3.8.1-4
+- Add valgrind-3.8.1-ppc32-instr-magic.patch. (#1142151)
+- Add valgrind-3.8.1-hwcaps-no-lzcnt.patch. (#1158802)
+- Add valgrind-3.8.1-llcache-size.patch. (#1163777)
+
 * Mon Aug 11 2014 Mark Wielaard <mjw@redhat.com> 3.8.1-3.7
 - Add valgrind-3.8.1-ppc64-prctl.patch. (#1126483)
 

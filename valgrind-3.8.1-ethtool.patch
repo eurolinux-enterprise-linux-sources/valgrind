@@ -1,0 +1,429 @@
+commit 84dff2f2f984aaaccb276520041a0375768e00f0
+Author: tom <tom@a5019735-40e9-0310-863c-91ae7b9d1cf9>
+Date:   Fri Jun 27 09:59:52 2014 +0000
+
+    Add support for various SIOCETHTOOL operations. BZ#303536.
+    
+    
+    git-svn-id: svn://svn.valgrind.org/valgrind/trunk@14114 a5019735-40e9-0310-863c-91ae7b9d1cf9
+
+diff --git a/coregrind/m_syswrap/syswrap-linux.c b/coregrind/m_syswrap/syswrap-linux.c
+index 48b437e..c195ca2 100644
+--- a/coregrind/m_syswrap/syswrap-linux.c
++++ b/coregrind/m_syswrap/syswrap-linux.c
+@@ -5869,6 +5869,127 @@ PRE(sys_ioctl)
+                      sizeof(((struct vki_ifreq *)ARG3)->vki_ifr_ifindex) );
+       PRE_MEM_WRITE( "ioctl(SIOCGIFNAME)", ARG3, sizeof(struct vki_ifreq));
+       break;
++   case VKI_SIOCETHTOOL: {       /* ethtool(8) interface         */
++      struct vki_ifreq *ir = (struct vki_ifreq *)ARG3;
++      PRE_MEM_READ( "ioctl(SIOCETHTOOL)", (Addr)ir, sizeof(struct vki_ifreq) );
++      PRE_MEM_RASCIIZ( "ioctl(SIOCETHTOOL)", (Addr)ir->vki_ifr_name );
++      PRE_MEM_READ( "ioctl(SIOCETHTOOL)", (Addr)ir->vki_ifr_data, sizeof(vki_u32) );
++      PRINT("SIOCETHTOOL( 0x%x )", *(vki_u32 *)ir->vki_ifr_data );
++      switch ( *(vki_u32 *)ir->vki_ifr_data ) {
++      case VKI_ETHTOOL_GSET:
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GSET)",
++                        (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_cmd) );
++         break;
++      case VKI_ETHTOOL_SSET:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,SSET)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_cmd) );
++         break;
++      case VKI_ETHTOOL_GDRVINFO:
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GDRVINFO)",
++                        (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_drvinfo) );
++         break;
++      case VKI_ETHTOOL_GREGS:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,GREGS)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_regs) );
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GREGS)",
++                        (Addr)((struct vki_ethtool_regs *)ir->vki_ifr_data)->data,
++                        ((struct vki_ethtool_regs *)ir->vki_ifr_data)->len );
++         break;
++      case VKI_ETHTOOL_GWOL:
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GWOL)",
++                        (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_wolinfo) );
++         break;
++      case VKI_ETHTOOL_SWOL:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,SWOL)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_wolinfo) );
++         break;
++      case VKI_ETHTOOL_GMSGLVL:
++      case VKI_ETHTOOL_GLINK:
++      case VKI_ETHTOOL_GRXCSUM:
++      case VKI_ETHTOOL_GSG:
++      case VKI_ETHTOOL_GTSO:
++      case VKI_ETHTOOL_GUFO:
++      case VKI_ETHTOOL_GGSO:
++      case VKI_ETHTOOL_GFLAGS:
++      case VKI_ETHTOOL_GGRO:
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,Gvalue)",
++                        (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_value) );
++         break;
++      case VKI_ETHTOOL_SMSGLVL:
++      case VKI_ETHTOOL_SRXCSUM:
++      case VKI_ETHTOOL_SSG:
++      case VKI_ETHTOOL_STSO:
++      case VKI_ETHTOOL_SUFO:
++      case VKI_ETHTOOL_SGSO:
++      case VKI_ETHTOOL_SFLAGS:
++      case VKI_ETHTOOL_SGRO:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,Svalue)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_value) );
++         break;
++      case VKI_ETHTOOL_NWAY_RST:
++         break;
++      case VKI_ETHTOOL_GRINGPARAM:
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GRINGPARAM)",
++                        (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_ringparam) );
++         break;
++      case VKI_ETHTOOL_SRINGPARAM:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,SRINGPARAM)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_ringparam) );
++         break;
++      case VKI_ETHTOOL_TEST:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,TEST)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_test) );
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,TEST)",
++                        (Addr)((struct vki_ethtool_test *)ir->vki_ifr_data)->data,
++                        ((struct vki_ethtool_test *)ir->vki_ifr_data)->len * sizeof(__vki_u64) );
++         break;
++      case VKI_ETHTOOL_PHYS_ID:
++         break;
++      case VKI_ETHTOOL_GPERMADDR:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,GPERMADDR)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_perm_addr) );
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GPERMADDR)",
++                        (Addr)((struct vki_ethtool_perm_addr *)ir->vki_ifr_data)->data,
++                        ((struct vki_ethtool_perm_addr *)ir->vki_ifr_data)->size );
++         break;
++      case VKI_ETHTOOL_RESET:
++         break;
++      case VKI_ETHTOOL_GSSET_INFO:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,GSSET_INFO)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_sset_info) );
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GSSET_INFO)",
++                        (Addr)((struct vki_ethtool_sset_info *)ir->vki_ifr_data)->data,
++                        __builtin_popcountll(((struct vki_ethtool_sset_info *)ir->vki_ifr_data)->sset_mask) * sizeof(__vki_u32) );
++         break;
++      case VKI_ETHTOOL_GFEATURES:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,GFEATURES)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_gfeatures) );
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GFEATURES)",
++                        (Addr)((struct vki_ethtool_gfeatures *)ir->vki_ifr_data)->features,
++                        ((struct vki_ethtool_gfeatures *)ir->vki_ifr_data)->size * sizeof(struct vki_ethtool_get_features_block) );
++         break;
++      case VKI_ETHTOOL_SFEATURES:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,SFEATURES)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_sfeatures) );
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,SFEATURES)",
++                       (Addr)((struct vki_ethtool_sfeatures *)ir->vki_ifr_data)->features,
++                       ((struct vki_ethtool_sfeatures *)ir->vki_ifr_data)->size * sizeof(struct vki_ethtool_set_features_block) );
++         break;
++      case VKI_ETHTOOL_GCHANNELS:
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GCHANNELS)",
++                        (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_channels) );
++         break;
++      case VKI_ETHTOOL_SCHANNELS:
++         PRE_MEM_READ( "ioctl(SIOCETHTOOL,SCHANNELS)",
++                       (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_channels) );
++         break;
++      case VKI_ETHTOOL_GET_TS_INFO:
++         PRE_MEM_WRITE( "ioctl(SIOCETHTOOL,GET_TS_INFO)",
++                        (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_ts_info) );
++         break;
++      }
++      break;
++   }
+    case VKI_SIOCGMIIPHY:         /* get hardware entry           */
+       PRE_MEM_RASCIIZ( "ioctl(SIOCGIFMIIPHY)",
+                      (Addr)((struct vki_ifreq *)ARG3)->vki_ifr_name );
+@@ -7332,6 +7453,86 @@ POST(sys_ioctl)
+                 (Addr)&((struct vki_ifreq *)ARG3)->vki_ifr_name,
+                 sizeof(((struct vki_ifreq *)ARG3)->vki_ifr_name) );
+       break;
++   case VKI_SIOCETHTOOL: {       /* ethtool(8) interface         */
++      struct vki_ifreq *ir = (struct vki_ifreq *)ARG3;
++      switch ( *(vki_u32 *)ir->vki_ifr_data ) {
++      case VKI_ETHTOOL_GSET:
++         POST_MEM_WRITE( (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_cmd));
++         break;
++      case VKI_ETHTOOL_SSET:
++         break;
++      case VKI_ETHTOOL_GDRVINFO:
++         POST_MEM_WRITE( (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_drvinfo) );
++         break;
++      case VKI_ETHTOOL_GREGS:
++         POST_MEM_WRITE( (Addr)((struct vki_ethtool_regs *)ir->vki_ifr_data)->data,
++                         ((struct vki_ethtool_regs *)ir->vki_ifr_data)->len );
++         break;
++      case VKI_ETHTOOL_GWOL:
++         POST_MEM_WRITE( (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_wolinfo) );
++         break;
++      case VKI_ETHTOOL_SWOL:
++         break;
++      case VKI_ETHTOOL_GMSGLVL:
++      case VKI_ETHTOOL_GLINK:
++      case VKI_ETHTOOL_GRXCSUM:
++      case VKI_ETHTOOL_GSG:
++      case VKI_ETHTOOL_GTSO:
++      case VKI_ETHTOOL_GUFO:
++      case VKI_ETHTOOL_GGSO:
++      case VKI_ETHTOOL_GFLAGS:
++      case VKI_ETHTOOL_GGRO:
++         POST_MEM_WRITE( (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_value));
++         break;
++      case VKI_ETHTOOL_SMSGLVL:
++      case VKI_ETHTOOL_SRXCSUM:
++      case VKI_ETHTOOL_SSG:
++      case VKI_ETHTOOL_STSO:
++      case VKI_ETHTOOL_SUFO:
++      case VKI_ETHTOOL_SGSO:
++      case VKI_ETHTOOL_SFLAGS:
++      case VKI_ETHTOOL_SGRO:
++         break;
++      case VKI_ETHTOOL_NWAY_RST:
++         break;
++      case VKI_ETHTOOL_GRINGPARAM:
++         POST_MEM_WRITE( (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_ringparam));
++         break;
++      case VKI_ETHTOOL_SRINGPARAM:
++         break;
++      case VKI_ETHTOOL_TEST:
++         POST_MEM_WRITE( (Addr)((struct vki_ethtool_test *)ir->vki_ifr_data)->data,
++                         ((struct vki_ethtool_test *)ir->vki_ifr_data)->len * sizeof(__vki_u64) );
++         break;
++      case VKI_ETHTOOL_PHYS_ID:
++         break;
++      case VKI_ETHTOOL_GPERMADDR:
++         POST_MEM_WRITE( (Addr)((struct vki_ethtool_perm_addr *)ir->vki_ifr_data)->data,
++                         ((struct vki_ethtool_perm_addr *)ir->vki_ifr_data)->size );
++         break;
++      case VKI_ETHTOOL_RESET:
++         break;
++      case VKI_ETHTOOL_GSSET_INFO:
++         POST_MEM_WRITE( (Addr)((struct vki_ethtool_sset_info *)ir->vki_ifr_data)->data,
++                        __builtin_popcountll(((struct vki_ethtool_sset_info *)ir->vki_ifr_data)->sset_mask) * sizeof(__vki_u32) );
++         break;
++      case VKI_ETHTOOL_GFEATURES:
++         POST_MEM_WRITE( (Addr)((struct vki_ethtool_gfeatures *)ir->vki_ifr_data)->features,
++                         ((struct vki_ethtool_gfeatures *)ir->vki_ifr_data)->size * sizeof(struct vki_ethtool_get_features_block) );
++         break;
++      case VKI_ETHTOOL_SFEATURES:
++         break;
++      case VKI_ETHTOOL_GCHANNELS:
++         POST_MEM_WRITE( (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_channels) );
++         break;
++      case VKI_ETHTOOL_SCHANNELS:
++         break;
++      case VKI_ETHTOOL_GET_TS_INFO:
++         POST_MEM_WRITE( (Addr)ir->vki_ifr_data, sizeof(struct vki_ethtool_ts_info) );
++         break;
++      }
++      break;
++   }
+    case VKI_SIOCGMIIPHY:         /* get hardware entry           */
+       POST_MEM_WRITE(
+                 (Addr)&((struct vki_mii_ioctl_data *)&((struct vki_ifreq *)ARG3)->vki_ifr_data)->phy_id,
+--- valgrind-3.8.1/include/vki/vki-linux.h.orig	2012-08-17 08:59:48.000000000 +0200
++++ valgrind-3.8.1/include/vki/vki-linux.h	2015-02-16 21:54:50.417651317 +0100
+@@ -1607,6 +1607,8 @@
+ #define VKI_SIOCGIFTXQLEN	0x8942	/* Get the tx queue length	*/
+ #define VKI_SIOCSIFTXQLEN	0x8943	/* Set the tx queue length 	*/
+ 
++#define VKI_SIOCETHTOOL		0x8946	/* Ethtool interface		*/
++
+ #define VKI_SIOCGMIIPHY		0x8947	/* Get address of MII PHY in use. */
+ #define VKI_SIOCGMIIREG		0x8948	/* Read MII PHY register.	*/
+ #define VKI_SIOCSMIIREG		0x8949	/* Write MII PHY register.	*/
+@@ -3009,6 +3011,189 @@
+ #define VKI_UI_SET_SWBIT		_VKI_IOW(VKI_UINPUT_IOCTL_BASE, 109, int)
+ #define VKI_UI_SET_PROPBIT		_VKI_IOW(VKI_UINPUT_IOCTL_BASE, 110, int)
+ 
++//----------------------------------------------------------------------
++// From linux/include/uapi/linux/ethtool.h
++//----------------------------------------------------------------------
++
++struct vki_ethtool_cmd {
++	__vki_u32	cmd;
++	__vki_u32	supported;
++	__vki_u32	advertising;
++	__vki_u16	speed;
++	__vki_u8	duplex;
++	__vki_u8	port;
++	__vki_u8	phy_address;
++	__vki_u8	transceiver;
++	__vki_u8	autoneg;
++	__vki_u8	mdio_support;
++	__vki_u32	maxtxpkt;
++	__vki_u32	maxrxpkt;
++	__vki_u16	speed_hi;
++	__vki_u8	eth_tp_mdix;
++	__vki_u8	eth_tp_mdix_ctrl;
++	__vki_u32	lp_advertising;
++	__vki_u32	reserved[2];
++};
++
++#define VKI_ETHTOOL_FWVERS_LEN	32
++#define VKI_ETHTOOL_BUSINFO_LEN	32
++
++struct vki_ethtool_drvinfo {
++	__vki_u32	cmd;
++	char	driver[32];
++	char	version[32];
++	char	fw_version[VKI_ETHTOOL_FWVERS_LEN];
++	char	bus_info[VKI_ETHTOOL_BUSINFO_LEN];
++	char	reserved1[32];
++	char	reserved2[12];
++	__vki_u32	n_priv_flags;
++	__vki_u32	n_stats;
++	__vki_u32	testinfo_len;
++	__vki_u32	eedump_len;
++	__vki_u32	regdump_len;
++};
++
++#define VKI_SOPASS_MAX	6
++
++struct vki_ethtool_wolinfo {
++	__vki_u32	cmd;
++	__vki_u32	supported;
++	__vki_u32	wolopts;
++	__vki_u8	sopass[VKI_SOPASS_MAX];
++};
++
++struct vki_ethtool_value {
++	__vki_u32	cmd;
++	__vki_u32	data;
++};
++
++struct vki_ethtool_regs {
++	__vki_u32	cmd;
++	__vki_u32	version;
++	__vki_u32	len;
++	__vki_u8	data[0];
++};
++
++struct vki_ethtool_ringparam {
++	__vki_u32	cmd;
++	__vki_u32	rx_max_pending;
++	__vki_u32	rx_mini_max_pending;
++	__vki_u32	rx_jumbo_max_pending;
++	__vki_u32	tx_max_pending;
++	__vki_u32	rx_pending;
++	__vki_u32	rx_mini_pending;
++	__vki_u32	rx_jumbo_pending;
++	__vki_u32	tx_pending;
++};
++
++struct vki_ethtool_channels {
++	__vki_u32	cmd;
++	__vki_u32	max_rx;
++	__vki_u32	max_tx;
++	__vki_u32	max_other;
++	__vki_u32	max_combined;
++	__vki_u32	rx_count;
++	__vki_u32	tx_count;
++	__vki_u32	other_count;
++	__vki_u32	combined_count;
++};
++
++struct vki_ethtool_sset_info {
++	__vki_u32	cmd;
++	__vki_u32	reserved;
++	__vki_u64	sset_mask;
++	__vki_u32	data[0];
++};
++
++struct vki_ethtool_test {
++	__vki_u32	cmd;
++	__vki_u32	flags;
++	__vki_u32	reserved;
++	__vki_u32	len;
++	__vki_u64	data[0];
++};
++
++struct vki_ethtool_perm_addr {
++	__vki_u32	cmd;
++	__vki_u32	size;
++	__vki_u8	data[0];
++};
++
++struct vki_ethtool_get_features_block {
++	__vki_u32	available;
++	__vki_u32	requested;
++	__vki_u32	active;
++	__vki_u32	never_changed;
++};
++
++struct vki_ethtool_gfeatures {
++	__vki_u32	cmd;
++	__vki_u32	size;
++	struct vki_ethtool_get_features_block features[0];
++};
++
++struct vki_ethtool_set_features_block {
++	__vki_u32	valid;
++	__vki_u32	requested;
++};
++
++struct vki_ethtool_sfeatures {
++	__vki_u32	cmd;
++	__vki_u32	size;
++	struct vki_ethtool_set_features_block features[0];
++};
++
++struct vki_ethtool_ts_info {
++	__vki_u32	cmd;
++	__vki_u32	so_timestamping;
++	__vki_s32	phc_index;
++	__vki_u32	tx_types;
++	__vki_u32	tx_reserved[3];
++	__vki_u32	rx_filters;
++	__vki_u32	rx_reserved[3];
++};
++
++#define VKI_ETHTOOL_GSET	0x00000001 /* Get settings. */
++#define VKI_ETHTOOL_SSET	0x00000002 /* Set settings. */
++#define VKI_ETHTOOL_GDRVINFO	0x00000003 /* Get driver info. */
++#define VKI_ETHTOOL_GREGS	0x00000004 /* Get NIC registers. */
++#define VKI_ETHTOOL_GWOL	0x00000005 /* Get wake-on-lan options. */
++#define VKI_ETHTOOL_SWOL	0x00000006 /* Set wake-on-lan options. */
++#define VKI_ETHTOOL_GMSGLVL	0x00000007 /* Get driver message level */
++#define VKI_ETHTOOL_SMSGLVL	0x00000008 /* Set driver msg level. */
++#define VKI_ETHTOOL_NWAY_RST	0x00000009 /* Restart autonegotiation. */
++#define VKI_ETHTOOL_GLINK	0x0000000a
++#define VKI_ETHTOOL_GRINGPARAM	0x00000010 /* Get ring parameters */
++#define VKI_ETHTOOL_SRINGPARAM	0x00000011 /* Set ring parameters. */
++#define VKI_ETHTOOL_GRXCSUM	0x00000014 /* Get RX hw csum enable (ethtool_value) */
++#define VKI_ETHTOOL_SRXCSUM	0x00000015 /* Set RX hw csum enable (ethtool_value) */
++#define VKI_ETHTOOL_GTXCSUM	0x00000016 /* Get TX hw csum enable (ethtool_value) */
++#define VKI_ETHTOOL_STXCSUM	0x00000017 /* Set TX hw csum enable (ethtool_value) */
++#define VKI_ETHTOOL_GSG		0x00000018 /* Get scatter-gather enable
++					    * (ethtool_value) */
++#define VKI_ETHTOOL_SSG		0x00000019 /* Set scatter-gather enable
++					    * (ethtool_value). */
++#define VKI_ETHTOOL_TEST	0x0000001a /* execute NIC self-test. */
++#define VKI_ETHTOOL_PHYS_ID	0x0000001c /* identify the NIC */
++#define VKI_ETHTOOL_GTSO	0x0000001e /* Get TSO enable (ethtool_value) */
++#define VKI_ETHTOOL_STSO	0x0000001f /* Set TSO enable (ethtool_value) */
++#define VKI_ETHTOOL_GPERMADDR	0x00000020 /* Get permanent hardware address */
++#define VKI_ETHTOOL_GUFO	0x00000021 /* Get UFO enable (ethtool_value) */
++#define VKI_ETHTOOL_SUFO	0x00000022 /* Set UFO enable (ethtool_value) */
++#define VKI_ETHTOOL_GGSO	0x00000023 /* Get GSO enable (ethtool_value) */
++#define VKI_ETHTOOL_SGSO	0x00000024 /* Set GSO enable (ethtool_value) */
++#define VKI_ETHTOOL_GFLAGS	0x00000025 /* Get flags bitmap(ethtool_value) */
++#define VKI_ETHTOOL_SFLAGS	0x00000026 /* Set flags bitmap(ethtool_value) */
++#define VKI_ETHTOOL_GGRO	0x0000002b /* Get GRO enable (ethtool_value) */
++#define VKI_ETHTOOL_SGRO	0x0000002c /* Set GRO enable (ethtool_value) */
++#define VKI_ETHTOOL_RESET	0x00000034 /* Reset hardware */
++#define VKI_ETHTOOL_GSSET_INFO	0x00000037 /* Get string set info */
++#define VKI_ETHTOOL_GFEATURES	0x0000003a /* Get device offload settings */
++#define VKI_ETHTOOL_SFEATURES	0x0000003b /* Change device offload settings */
++#define VKI_ETHTOOL_GCHANNELS	0x0000003c /* Get no of channels */
++#define VKI_ETHTOOL_SCHANNELS	0x0000003d /* Set no of channels */
++#define VKI_ETHTOOL_GET_TS_INFO	0x00000041 /* Get time stamping and PHC info */
++
+ #endif // __VKI_LINUX_H
+ 
+ /*--------------------------------------------------------------------*/

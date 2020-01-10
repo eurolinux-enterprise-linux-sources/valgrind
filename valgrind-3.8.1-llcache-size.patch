@@ -1,0 +1,155 @@
+--- valgrind/cachegrind/cg-arch.c	2012-08-17 08:59:48.000000000 +0200
++++ valgrind/cachegrind/cg-arch.c	2014-12-18 12:21:52.038213102 +0100
+@@ -157,6 +159,117 @@
+    }
+ }
+ 
++
++/* If the LL cache config isn't something the simulation functions
++   can handle, try to adjust it so it is.  Caches are characterised
++   by (total size T, line size L, associativity A), and then we
++   have
++
++     number of sets S = T / (L * A)
++
++   The required constraints are:
++
++   * L must be a power of 2, but it always is in practice, so
++     no problem there
++
++   * A can be any value >= 1
++
++   * T can be any value, but ..
++
++   * S must be a power of 2.
++
++   That sometimes gives a problem.  For example, some Core iX based
++   Intel CPUs have T = 12MB, A = 16, L = 64, which gives 12288
++   sets.  Some AMD cpus have T = 5MB, A = 48, L = 64, which gives
++   1706.667 sets (!).
++
++   The "fix" is to force S down to the nearest power of two below its
++   original value, and increase A proportionately, so as to keep the
++   total cache size the same.  In fact to be safe we recalculate the
++   cache size afterwards anyway, to guarantee that it divides exactly
++   between the new number of sets.
++
++   The "fix" is "justified" (cough, cough) by alleging that
++   increases of associativity above about 4 have very little effect
++   on the actual miss rate.  It would be far more inaccurate to
++   fudge this by changing the size of the simulated cache --
++   changing the associativity is a much better option.
++*/
++
++/* (Helper function) Returns the largest power of 2 that is <= |x|.
++   Even works when |x| == 0. */
++static UInt floor_power_of_2 ( UInt x )
++{
++   x = x | (x >> 1);
++   x = x | (x >> 2);
++   x = x | (x >> 4);
++   x = x | (x >> 8);
++   x = x | (x >> 16);
++   return x - (x >> 1);
++}
++
++static void
++maybe_tweak_LLc(cache_t *LLc)
++{
++  if (LLc->size == 0 || LLc->assoc == 0 || LLc->line_size == 0)
++     return;
++
++  tl_assert(LLc->size > 0 && LLc->assoc > 0 && LLc->line_size > 0);
++
++  UInt old_size      = (UInt)LLc->size;
++  UInt old_assoc     = (UInt)LLc->assoc;
++  UInt old_line_size = (UInt)LLc->line_size;
++
++  UInt new_size      = old_size;
++  UInt new_assoc     = old_assoc;
++  UInt new_line_size = old_line_size;
++
++  UInt old_nSets = old_size / (old_assoc * old_line_size);
++  if (old_nSets == 0) {
++     /* This surely can't happen; but would cause chaos with the maths
++      * below if it did.  Just give up if it does. */
++     return;
++  }
++
++  if (-1 != VG_(log2_64)(old_nSets)) {
++     /* The number of sets is already a power of 2.  Make sure that
++        the size divides exactly between the sets.  Almost all of the
++        time this will have no effect. */
++     new_size = old_line_size * old_assoc * old_nSets;
++  } else {
++     /* The number of sets isn't a power of two.  Calculate some
++        scale-down factor which causes the number of sets to become a
++        power of two.  Then, increase the associativity by that
++        factor.  Finally, re-calculate the total size so as to make
++        sure it divides exactly between the sets. */
++     tl_assert(old_nSets >= 0);
++     UInt new_nSets = floor_power_of_2 ( old_nSets );
++     tl_assert(new_nSets > 0 && new_nSets < old_nSets);
++     Double factor = (Double)old_nSets / (Double)new_nSets;
++     tl_assert(factor >= 1.0);
++
++     new_assoc = (UInt)(0.5 + factor * (Double)old_assoc);
++     tl_assert(new_assoc >= old_assoc);
++
++     new_size = old_line_size * new_assoc * new_nSets;
++  }
++  
++  tl_assert(new_line_size == old_line_size); /* we never change this */
++  if (new_size == old_size && new_assoc == old_assoc)
++     return;
++
++  VG_(dmsg)("warning: "
++            "specified LL cache: line_size %u  assoc %u  total_size %'u\n",
++            old_line_size, old_assoc, old_size);
++  VG_(dmsg)("warning: "
++            "simulated LL cache: line_size %u  assoc %u  total_size %'u\n",\
++            new_line_size, new_assoc, new_size);
++
++  LLc->size      = new_size;
++  LLc->assoc     = new_assoc;
++  LLc->line_size = new_line_size;
++}
++
+ void VG_(post_clo_init_configure_caches)(cache_t* I1c,
+                                          cache_t* D1c,
+                                          cache_t* LLc,
+@@ -174,7 +287,9 @@
+ 
+    // Set the cache config (using auto-detection, if supported by the
+    // architecture).
+-   VG_(configure_caches)( I1c, D1c, LLc, all_caches_clo_defined );
++   VG_(configure_caches)( I1c, D1c, LLc, all_caches_clo_defined );
++
++   maybe_tweak_LLc( LLc );
+ 
+    // Check the default/auto-detected values.
+    // Allow the user to override invalid auto-detected caches
+--- valgrind-3.8.1/cachegrind/tests/filter_stderr.orig	2015-02-05 00:16:50.383638616 +0100
++++ valgrind-3.8.1/cachegrind/tests/filter_stderr	2015-02-05 00:18:15.759461920 +0100
+@@ -21,4 +21,8 @@
+ sed "/Warning: Cannot auto-detect cache config on ARM, using one or more defaults/d" |
+ sed "/Warning: Cannot auto-detect cache config on s390x, using one or more defaults/d" |
+ sed "/Warning: Cannot auto-detect cache config on MIPS.., using one or more defaults/d" |
+-sed "/warning: pretending that LL cache has associativity .*$/d"
++sed "/Warning: Cannot auto-detect cache config, using defaults./d" |
++sed "/Run with -v to see./d" |
++sed "/warning: pretending that LL cache has associativity .*$/d" |
++sed "/warning: specified LL cache: line_size .*$/d" |
++sed "/warning: simulated LL cache: line_size .*$/d"
+--- valgrind-3.8.1/callgrind/tests/filter_stderr	2012-08-17 08:59:45.000000000 +0200
++++ valgrind-3.8.1/callgrind/tests/filter_stderr	2015-02-05 23:08:08.534869271 +0100
+@@ -30,4 +21,8 @@
+ sed "/Warning: Cannot auto-detect cache config on ARM, using one or more defaults/d" |
+ sed "/Warning: Cannot auto-detect cache config on s390x, using one or more defaults/d" |
+ sed "/Warning: Cannot auto-detect cache config on MIPS.., using one or more defaults/d" |
+-sed "/warning: pretending that LL cache has associativity .*$/d"
++sed "/Warning: Cannot auto-detect cache config, using defaults./d" |
++sed "/Run with -v to see./d" |
++sed "/warning: pretending that LL cache has associativity .*$/d" |
++sed "/warning: specified LL cache: line_size .*$/d" |
++sed "/warning: simulated LL cache: line_size .*$/d"
