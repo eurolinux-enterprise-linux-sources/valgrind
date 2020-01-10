@@ -1,0 +1,11 @@
+--- valgrind/coregrind/m_mallocfree.c.jj	2012-03-05 09:46:34.000000000 +0100
++++ valgrind/coregrind/m_mallocfree.c	2012-03-05 10:29:08.582960465 +0100
+@@ -1591,7 +1591,7 @@ void* VG_(arena_memalign) ( ArenaId aid,
+    // Check that the requested alignment seems reasonable; that is, is
+    // a power of 2.
+    if (req_alignB < VG_MIN_MALLOC_SZB
+-       || req_alignB > 1048576
++       || req_alignB > 4 * 1024 * 1024
+        || VG_(log2)( req_alignB ) == -1 /* not a power of 2 */) {
+       VG_(printf)("VG_(arena_memalign)(%p, %lu, %lu)\n"
+                   "bad alignment value %lu\n"
