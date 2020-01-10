@@ -1,0 +1,22 @@
+commit 8fa60ffd688fc4c85b04731329a860c3d6be7b77
+Author: tom <tom@a5019735-40e9-0310-863c-91ae7b9d1cf9>
+Date:   Mon Jan 21 15:17:02 2013 +0000
+
+    Replace bcopy on linux as, at least in 32 bit build, glibc will
+    sometimes choose to use an optimised version. Fixes #311407.
+    
+    
+    git-svn-id: svn://svn.valgrind.org/valgrind/trunk@13253 a5019735-40e9-0310-863c-91ae7b9d1cf9
+
+diff --git a/memcheck/mc_replace_strmem.c b/memcheck/mc_replace_strmem.c
+index c1a90bc..64df1c3 100644
+--- a/memcheck/mc_replace_strmem.c
++++ b/memcheck/mc_replace_strmem.c
+@@ -1103,6 +1103,7 @@ static inline void my_exit ( int x )
+    }
+ 
+ #if defined(VGO_linux)
++ BCOPY(VG_Z_LIBC_SONAME, bcopy)
+ 
+ #elif defined(VGO_darwin)
+  //BCOPY(VG_Z_LIBC_SONAME, bcopy)

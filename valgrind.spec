@@ -3,7 +3,7 @@
 Summary: Tool for finding memory management bugs in programs
 Name: %{?scl_prefix}valgrind
 Version: 3.8.1
-Release: 3.2%{?dist}
+Release: 3.7%{?dist}
 Epoch: 1
 License: GPLv2
 URL: http://www.valgrind.org/
@@ -124,6 +124,33 @@ Patch28: valgrind-3.8.1-s390_tsearch_supp.patch
 
 # KDE#307106 - unhandled instruction bytes: f0 0f c0 02 (lock xadd)
 Patch29: valgrind-3.8.1-xaddb.patch
+
+# KDE#323713 Support mmxext (integer sse) subset on i386 (athlon)
+Patch30: valgrind-3.8.1-mmxext.patch
+
+# KDE#310931 message-security assist instruction extension not implemented 
+Patch31: valgrind-3.8.1-s390-STFLE.patch
+
+# KDE#321969 - Support [lf]setxattr on ppc32 and ppc64 linux kernel
+Patch32: valgrind-3.8.1-ppc-setxattr.patch
+
+# KDE#316503 Implement SSE4 MOVNTDQA insn.
+Patch33: valgrind-3.8.1-movntdqa.patch
+
+# KDE#280114 AMD64 general protection fail reported in signal handler
+Patch34: valgrind-3.8.1-amd64-sigstack.patch
+
+# KDE#318643 annotate_trace_memory tests go into infinite loop on arm and ppc
+Patch35: valgrind-3.8.1-annotate-trace-memory.patch
+
+# KDE#331337 - s390x WARNING: unhandled syscall: 326 (dup3)
+Patch36: valgrind-3.8.1-s390-dup3.patch
+
+# KDE#311407 - ssse3 bcopy (actually converted memcpy) causes invalid read
+Patch37: valgrind-3.8.1-bcopy.patch
+
+# KDE#308089 - Enable prctl on ppc64-linux.
+Patch38: valgrind-3.8.1-ppc64-prctl.patch
 
 Obsoletes: valgrind-callgrind
 %ifarch x86_64 ppc64
@@ -255,6 +282,16 @@ touch ./none/tests/amd64/bmi.stderr.exp
 %endif
 
 %patch29 -p1
+
+%patch30 -p1
+%patch31 -p1
+%patch32 -p1
+%patch33 -p1
+%patch34 -p1
+%patch35 -p1
+%patch36 -p1
+%patch37 -p1
+%patch38 -p1
 
 # To suppress eventual automake warnings/errors
 rm -f gdbserver_tests/filter_gdb.orig
@@ -404,6 +441,26 @@ echo ===============END TESTING===============
 %endif
 
 %changelog
+* Mon Aug 11 2014 Mark Wielaard <mjw@redhat.com> 3.8.1-3.7
+- Add valgrind-3.8.1-ppc64-prctl.patch. (#1126483)
+
+* Wed Jul 16 2014 Mark Wielaard <mjw@redhat.com> 3.8.1-3.6
+- Add valgrind-3.8.1-bcopy.patch. (#1120021)
+
+* Tue May 27 2014 Mark Wielaard <mjw@redhat.com> 3.8.1-3.5
+- Add valgrind-3.9.0-s390-dup3.patch. (#1101422)
+
+* Fri May 23 2014 Mark Wielaard <mjw@redhat.com> 3.8.1-3.4
+- Add valgrind-3.8.1-annotate-trace-memory.patch (#1100645)
+
+* Fri May 09 2014 Mark Wielaard <mjw@redhat.com> 3.8.1-3.3
+- Add valgrind-3.8.1-mmxext.patch (#828341)
+- Add valgrind-3.8.1-s390-STFLE.patch (#881893)
+  s390 message-security assist (MSA) instruction extension not implemented.
+- Add valgrind-3.8.1-ppc-setxattr.patch (#1007400)
+- Implement SSE4 MOVNTDQA insn (valgrind-3.8.1-movntdqa.patch) (#1012932)
+- Add valgrind-3.8.1-amd64-sigstack.patch (#1024162)
+
 * Tue Oct 16 2012 Mark Wielaard <mjw@redhat.com> 3.8.1-3.2
 - Add valgrind-3.8.1-xaddb.patch (#866941, KDE#307106)
 

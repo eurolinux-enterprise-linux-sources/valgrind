@@ -1,0 +1,22 @@
+commit fdb70818be5a8a9dfb6b1502e5a9bcb75dd66f3f
+Author: sewardj <sewardj@a5019735-40e9-0310-863c-91ae7b9d1cf9>
+Date:   Fri Mar 29 09:40:48 2013 +0000
+
+    Enable prctl on ppc64-linux.  Fixes #308089.
+    
+    
+    git-svn-id: svn://svn.valgrind.org/valgrind/trunk@13350 a5019735-40e9-0310-863c-91ae7b9d1cf9
+
+diff --git a/coregrind/m_syswrap/syswrap-ppc64-linux.c b/coregrind/m_syswrap/syswrap-ppc64-linux.c
+index 2d8da0c..94f51db 100644
+--- a/coregrind/m_syswrap/syswrap-ppc64-linux.c
++++ b/coregrind/m_syswrap/syswrap-ppc64-linux.c
+@@ -882,7 +882,7 @@ static SyscallTableEntry syscall_table[] = {
+    LINX_(__NR_setresgid,         sys_setresgid),          // 169
+ 
+    LINXY(__NR_getresgid,         sys_getresgid),          // 170
+-// _____(__NR_prctl,             sys_prctl),              // 171
++   LINXY(__NR_prctl,             sys_prctl),              // 171
+    PLAX_(__NR_rt_sigreturn,      sys_rt_sigreturn),       // 172
+    LINXY(__NR_rt_sigaction,      sys_rt_sigaction),       // 173
+    LINXY(__NR_rt_sigprocmask,    sys_rt_sigprocmask),     // 174

@@ -1,0 +1,34 @@
+commit ef91fceedfd6134c6be1e135ad68c96c51c3265e
+Author: tom <tom@a5019735-40e9-0310-863c-91ae7b9d1cf9>
+Date:   Sun Dec 16 09:52:38 2012 +0000
+
+    Make sure the stack pointer is properly aligned when invoking a
+    signal on amd64-linux systems.
+    
+    The amd64 ABI describes the required alignment on function entry
+    as follows:
+    
+      "In other words, the value (%rsp − 8) is always a multiple
+       of 16 when control is transferred to the function entry point.
+    
+    So we need to 16 byte align and then subtract an extra 8 bytes
+    to achieve the correct alignment.
+    
+    Patch from fjgmacc@gmail.com to fix BZ#280114.
+    
+    
+    git-svn-id: svn://svn.valgrind.org/valgrind/trunk@13182 a5019735-40e9-0310-863c-91ae7b9d1cf9
+
+diff --git a/coregrind/m_sigframe/sigframe-amd64-linux.c b/coregrind/m_sigframe/sigframe-amd64-linux.c
+index 60f70b3..651ea11 100644
+--- a/coregrind/m_sigframe/sigframe-amd64-linux.c
++++ b/coregrind/m_sigframe/sigframe-amd64-linux.c
+@@ -452,7 +452,7 @@ static Addr build_rt_sigframe(ThreadState *tst,
+    UWord err;
+ 
+    rsp -= sizeof(*frame);
+-   rsp = VG_ROUNDDN(rsp, 16);
++   rsp = VG_ROUNDDN(rsp, 16) - 8;
+    frame = (struct rt_sigframe *)rsp;
+ 
+    if (!extend(tst, rsp, sizeof(*frame)))

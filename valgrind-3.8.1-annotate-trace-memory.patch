@@ -1,0 +1,25 @@
+commit 58ce071e0bd35f0f5e43443252b4a7509199c8b3
+Author: bart <bart@a5019735-40e9-0310-863c-91ae7b9d1cf9>
+Date:   Wed May 22 16:30:29 2013 +0000
+
+    drd/tests/annotate_trace_memory: Make this test more ARM/PPC friendly (#318643)
+    
+    git-svn-id: svn://svn.valgrind.org/valgrind/trunk@13406 a5019735-40e9-0310-863c-91ae7b9d1cf9
+
+diff --git a/drd/tests/annotate_trace_memory.c b/drd/tests/annotate_trace_memory.c
+index 697f0a8..f539336 100644
+--- a/drd/tests/annotate_trace_memory.c
++++ b/drd/tests/annotate_trace_memory.c
+@@ -32,10 +32,10 @@ int main(int argc, char** argv)
+   i16++;
+   fprintf(stderr, "uint32_t\n");
+   i32 = 8;
+-  __sync_add_and_fetch(&i32, 1);
++  i32++;
+   fprintf(stderr, "uint64_t\n");
+   i64 = 9;
+-  __sync_add_and_fetch(&i64, 0x12345678ULL);
++  i64 += 0x12345678ULL;
+ 
+   DRD_STOP_TRACING_VAR(f);
+   DRD_STOP_TRACING_VAR(d);
