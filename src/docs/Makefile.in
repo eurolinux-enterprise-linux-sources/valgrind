@@ -61,6 +61,7 @@ CCASDEPMODE = @CCASDEPMODE@
 CCASFLAGS = @CCASFLAGS@
 CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
+CFLAGS_MPI = @CFLAGS_MPI@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
 CXX = @CXX@
@@ -79,8 +80,6 @@ EXEEXT = @EXEEXT@
 FLAG_FNO_STACK_PROTECTOR = @FLAG_FNO_STACK_PROTECTOR@
 FLAG_M32 = @FLAG_M32@
 FLAG_M64 = @FLAG_M64@
-FLAG_MAIX32 = @FLAG_MAIX32@
-FLAG_MAIX64 = @FLAG_MAIX64@
 FLAG_MMMX = @FLAG_MMMX@
 FLAG_MSSE = @FLAG_MSSE@
 FLAG_NO_BUILD_ID = @FLAG_NO_BUILD_ID@
@@ -88,6 +87,8 @@ FLAG_UNLIMITED_INLINE_UNIT_GROWTH = @FLAG_UNLIMITED_INLINE_UNIT_GROWTH@
 FLAG_W_EXTRA = @FLAG_W_EXTRA@
 FLAG_W_NO_EMPTY_BODY = @FLAG_W_NO_EMPTY_BODY@
 FLAG_W_NO_FORMAT_ZERO_LENGTH = @FLAG_W_NO_FORMAT_ZERO_LENGTH@
+FLAG_W_NO_NONNULL = @FLAG_W_NO_NONNULL@
+FLAG_W_NO_OVERFLOW = @FLAG_W_NO_OVERFLOW@
 FLAG_W_NO_UNINITIALIZED = @FLAG_W_NO_UNINITIALIZED@
 GDB = @GDB@
 GLIBC_VERSION = @GLIBC_VERSION@
@@ -98,6 +99,7 @@ INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LDFLAGS = @LDFLAGS@
+LDFLAGS_MPI = @LDFLAGS_MPI@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LN_S = @LN_S@
@@ -116,10 +118,7 @@ PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PERL = @PERL@
-PKG_CONFIG = @PKG_CONFIG@
 PREFERRED_STACK_BOUNDARY = @PREFERRED_STACK_BOUNDARY@
-QTCORE_CFLAGS = @QTCORE_CFLAGS@
-QTCORE_LIBS = @QTCORE_LIBS@
 RANLIB = @RANLIB@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
@@ -133,6 +132,7 @@ VGCONF_ARCH_SEC = @VGCONF_ARCH_SEC@
 VGCONF_OS = @VGCONF_OS@
 VGCONF_PLATFORM_PRI_CAPS = @VGCONF_PLATFORM_PRI_CAPS@
 VGCONF_PLATFORM_SEC_CAPS = @VGCONF_PLATFORM_SEC_CAPS@
+VGCONF_PLATVARIANT = @VGCONF_PLATVARIANT@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -187,7 +187,7 @@ top_srcdir = @top_srcdir@
 
 # Comment out the next line to skip building print docs.  The default
 # is not to skip building print docs.  Note, after changing it
-# you of course need to re-run configure to make it take effect.
+# you need to re-run autogen.sh and configure to make it take effect.
 BUILD_ALL_DOCS = yes
 EXTRA_DIST = \
 	README \
@@ -201,21 +201,28 @@ EXTRA_DIST = \
 	internals/3_3_BUGSTATUS.txt \
 	internals/3_4_BUGSTATUS.txt \
 	internals/3_5_BUGSTATUS.txt \
+	internals/3_7_BUGSTATUS.txt \
+	internals/arm_thumb_notes_gdbserver.txt \
+	internals/avx-notes.txt \
 	internals/BIG_APP_NOTES.txt \
 	internals/Darwin-notes.txt \
+	internals/SPEC-notes.txt \
 	internals/directory-structure.txt \
 	internals/howto_BUILD_KDE42.txt \
 	internals/howto_oprofile.txt \
 	internals/m_replacemalloc.txt \
 	internals/m_syswrap.txt \
 	internals/module-structure.txt \
+	internals/multiple-architectures.txt \
 	internals/notes.txt \
+	internals/performance.txt \
 	internals/porting-HOWTO.txt \
 	internals/mpi2entries.txt \
 	internals/porting-to-ARM.txt \
 	internals/register-uses.txt \
 	internals/release-HOWTO.txt \
 	internals/segments-seginfos.txt \
+	internals/t-chaining-notes.txt \
 	internals/threads-syscalls-signals.txt \
 	internals/tm-mutexstates.dot \
 	internals/tm-threadstates.dot \
@@ -278,6 +285,7 @@ XSL_FO_STYLE = $(mylibdir)/vg-fo.xsl
 XSL_TEXT_STYLE = $(mylibdir)/vg-faq2txt.xsl
 XSL_WEBSITE_STYLE = $(mylibdir)/vg-html-website.xsl
 XSL_MAN_STYLES = \
+    /usr/share/sgml/docbook/xsl-stylesheets/manpages/docbook.xsl \
     /usr/share/xml/docbook/stylesheet/nwalsh/current/manpages/docbook.xsl \
     /usr/share/xml/docbook/stylesheet/nwalsh/manpages/docbook.xsl
 
@@ -477,6 +485,7 @@ FAQ.txt:
 
 # the valgrind manpages
 man-pages:
+	set -e; \
 	for x in $(XSL_MAN_STYLES) ; do \
 	    if test -f $$x; then \
 		echo "Using manpage stylesheet: $$x"; \
@@ -528,6 +537,7 @@ print-docs:
 # be the one to handle the else/endif parts, not GNU make
 # as we intend.
 install-data-hook:
+	set -e; \
 	if test -r html ; then \
 		mkdir -p $(DESTDIR)$(datadir)/doc/valgrind; \
 		cp -r html $(DESTDIR)$(datadir)/doc/valgrind; \
@@ -539,10 +549,12 @@ install-data-hook:
 		fi \
 	done
  ifeq ($(BUILD_ALL_DOCS),yes)
+	set -e; \
 	if test -r index.pdf ; then \
 		mkdir -p $(DESTDIR)$(datadir)/doc/valgrind; \
 		cp index.pdf $(DESTDIR)$(datadir)/doc/valgrind/valgrind_manual.pdf; \
 	fi
+	set -e; \
 	if test -r index.ps ; then \
 		mkdir -p $(DESTDIR)$(datadir)/doc/valgrind; \
 		cp index.ps $(DESTDIR)$(datadir)/doc/valgrind/valgrind_manual.ps; \

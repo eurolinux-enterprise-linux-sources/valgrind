@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2010 OpenWorks LLP
+   Copyright (C) 2004-2012 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -104,7 +104,7 @@
 
    One Vex IR translation for this code would be this:
 
-     ------ IMark(0x24F275, 7) ------
+     ------ IMark(0x24F275, 7, 0) ------
      t3 = GET:I32(0)             # get %eax, a 32-bit integer
      t2 = GET:I32(12)            # get %ebx, a 32-bit integer
      t1 = Add32(t3,t2)           # addl
@@ -147,7 +147,7 @@
    This becomes (again ignoring condition code and instruction pointer
    updates):
 
-     ------ IMark(0x4000ABA, 3) ------
+     ------ IMark(0x4000ABA, 3, 0) ------
      t3 = Add32(GET:I32(0),0x4:I32)
      t2 = LDle:I32(t3)
      t1 = GET:I32(8)
@@ -227,7 +227,12 @@ typedef
       Ity_I128,  /* 128-bit scalar */
       Ity_F32,   /* IEEE 754 float */
       Ity_F64,   /* IEEE 754 double */
-      Ity_V128   /* 128-bit SIMD */
+      Ity_D32,   /* 32-bit Decimal floating point */
+      Ity_D64,   /* 64-bit Decimal floating point */
+      Ity_D128,  /* 128-bit Decimal floating point */
+      Ity_F128,  /* 128-bit floating point; implementation defined */
+      Ity_V128,  /* 128-bit SIMD */
+      Ity_V256   /* 256-bit SIMD */
    }
    IRType;
 
@@ -261,11 +266,16 @@ typedef
       Ico_U16, 
       Ico_U32, 
       Ico_U64,
+      Ico_F32,   /* 32-bit IEEE754 floating */
+      Ico_F32i,  /* 32-bit unsigned int to be interpreted literally
+                    as a IEEE754 single value. */
       Ico_F64,   /* 64-bit IEEE754 floating */
       Ico_F64i,  /* 64-bit unsigned int to be interpreted literally
                     as a IEEE754 double value. */
-      Ico_V128   /* 128-bit restricted vector constant, with 1 bit
+      Ico_V128,  /* 128-bit restricted vector constant, with 1 bit
                     (repeated 8 times) for each of the 16 x 1-byte lanes */
+      Ico_V256   /* 256-bit restricted vector constant, with 1 bit
+                    (repeated 8 times) for each of the 32 x 1-byte lanes */
    }
    IRConstTag;
 
@@ -282,9 +292,12 @@ typedef
          UShort U16;
          UInt   U32;
          ULong  U64;
+         Float  F32;
+         UInt   F32i;
          Double F64;
          ULong  F64i;
          UShort V128;   /* 16-bit value; see Ico_V128 comment above */
+         UInt   V256;   /* 32-bit value; see Ico_V256 comment above */
       } Ico;
    }
    IRConst;
@@ -295,9 +308,12 @@ extern IRConst* IRConst_U8   ( UChar );
 extern IRConst* IRConst_U16  ( UShort );
 extern IRConst* IRConst_U32  ( UInt );
 extern IRConst* IRConst_U64  ( ULong );
+extern IRConst* IRConst_F32  ( Float );
+extern IRConst* IRConst_F32i ( UInt );
 extern IRConst* IRConst_F64  ( Double );
 extern IRConst* IRConst_F64i ( ULong );
 extern IRConst* IRConst_V128 ( UShort );
+extern IRConst* IRConst_V256 ( UInt );
 
 /* Deep-copy an IRConst */
 extern IRConst* deepCopyIRConst ( IRConst* );
@@ -314,9 +330,10 @@ extern Bool eqIRConst ( IRConst*, IRConst* );
 /* Describes a helper function to call.  The name part is purely for
    pretty printing and not actually used.  regparms=n tells the back
    end that the callee has been declared
-   "__attribute__((regparm(n)))".  On some targets (x86) the back end
-   will need to construct a non-standard sequence to call a function
-   declared like this. 
+   "__attribute__((regparm(n)))", although indirectly using the
+   VEX_REGPARM(n) macro.  On some targets (x86) the back end will need
+   to construct a non-standard sequence to call a function declared
+   like this.
 
    mcx_mask is a sop to Memcheck.  It indicates which args should be
    considered 'always defined' when lazily computing definedness of
@@ -460,6 +477,10 @@ typedef
       Iop_DivS32,   // ditto, signed
       Iop_DivU64,   // :: I64,I64 -> I64 (simple div, no mod)
       Iop_DivS64,   // ditto, signed
+      Iop_DivU64E,  // :: I64,I64 -> I64 (dividend is 64-bit arg (hi) concat with 64 0's (low))
+      Iop_DivS64E,  // ditto, signed
+      Iop_DivU32E,  // :: I32,I32 -> I32 (dividend is 32-bit arg (hi) concat with 32 0's (low))
+      Iop_DivS32E,  // ditto, signed
 
       Iop_DivModU64to32, // :: I64,I32 -> I64
                          // of which lo half is div and hi half is mod
@@ -468,6 +489,9 @@ typedef
       Iop_DivModU128to64, // :: V128,I64 -> V128
                           // of which lo half is div and hi half is mod
       Iop_DivModS128to64, // ditto, signed
+
+      Iop_DivModS64to64, // :: I64,I64 -> I128
+                         // of which lo half is div and hi half is mod
 
       /* Integer conversions.  Some of these are redundant (eg
          Iop_64to8 is the same as Iop_64to32 and then Iop_32to8), but
@@ -552,6 +576,8 @@ typedef
       */
       /* :: F64 x F64 -> IRCmpF64Result(I32) */
       Iop_CmpF64,
+      Iop_CmpF32,
+      Iop_CmpF128,
 
       /* --- Int to/from FP conversions. --- */
 
@@ -597,14 +623,25 @@ typedef
       Iop_F64toI16S, /* IRRoundingMode(I32) x F64 -> signed I16 */
       Iop_F64toI32S, /* IRRoundingMode(I32) x F64 -> signed I32 */
       Iop_F64toI64S, /* IRRoundingMode(I32) x F64 -> signed I64 */
+      Iop_F64toI64U, /* IRRoundingMode(I32) x F64 -> unsigned I64 */
 
       Iop_F64toI32U, /* IRRoundingMode(I32) x F64 -> unsigned I32 */
 
       Iop_I16StoF64, /*                       signed I16 -> F64 */
       Iop_I32StoF64, /*                       signed I32 -> F64 */
       Iop_I64StoF64, /* IRRoundingMode(I32) x signed I64 -> F64 */
+      Iop_I64UtoF64, /* IRRoundingMode(I32) x unsigned I64 -> F64 */
+      Iop_I64UtoF32, /* IRRoundingMode(I32) x unsigned I64 -> F32 */
 
       Iop_I32UtoF64, /*                       unsigned I32 -> F64 */
+
+      Iop_F32toI16S, /* IRRoundingMode(I32) x F32 -> signed I16 */
+      Iop_F32toI32S, /* IRRoundingMode(I32) x F32 -> signed I32 */
+      Iop_F32toI64S, /* IRRoundingMode(I32) x F32 -> signed I64 */
+
+      Iop_I16StoF32, /*                       signed I16 -> F32 */
+      Iop_I32StoF32, /* IRRoundingMode(I32) x signed I32 -> F32 */
+      Iop_I64StoF32, /* IRRoundingMode(I32) x signed I64 -> F32 */
 
       /* Conversion between floating point formats */
       Iop_F32toF64,  /*                       F32 -> F64 */
@@ -614,6 +651,30 @@ typedef
          the same bit pattern, or vice versa. */
       Iop_ReinterpF64asI64, Iop_ReinterpI64asF64,
       Iop_ReinterpF32asI32, Iop_ReinterpI32asF32,
+
+      /* Support for 128-bit floating point */
+      Iop_F64HLtoF128,/* (high half of F128,low half of F128) -> F128 */
+      Iop_F128HItoF64,/* F128 -> high half of F128 into a F64 register */
+      Iop_F128LOtoF64,/* F128 -> low  half of F128 into a F64 register */
+
+      /* :: IRRoundingMode(I32) x F128 x F128 -> F128 */
+      Iop_AddF128, Iop_SubF128, Iop_MulF128, Iop_DivF128,
+
+      /* :: F128 -> F128 */
+      Iop_NegF128, Iop_AbsF128,
+
+      /* :: IRRoundingMode(I32) x F128 -> F128 */
+      Iop_SqrtF128,
+
+      Iop_I32StoF128, /*                signed I32  -> F128 */
+      Iop_I64StoF128, /*                signed I64  -> F128 */
+      Iop_F32toF128,  /*                       F32  -> F128 */
+      Iop_F64toF128,  /*                       F64  -> F128 */
+
+      Iop_F128toI32S, /* IRRoundingMode(I32) x F128 -> signed I32  */
+      Iop_F128toI64S, /* IRRoundingMode(I32) x F128 -> signed I64  */
+      Iop_F128toF64,  /* IRRoundingMode(I32) x F128 -> F64         */
+      Iop_F128toF32,  /* IRRoundingMode(I32) x F128 -> F32         */
 
       /* --- guest x86/amd64 specifics, not mandated by 754. --- */
 
@@ -642,11 +703,19 @@ typedef
       Iop_RoundF32toInt, /* F32 value to nearest integral value (still
                             as F32) */
 
+      /* --- guest s390 specifics, not mandated by 754. --- */
+
+      /* Fused multiply-add/sub */
+      /* :: IRRoundingMode(I32) x F32 x F32 x F32 -> F32
+            (computes op3 * op2 +/- op1 */
+      Iop_MAddF32, Iop_MSubF32,
+
       /* --- guest ppc32/64 specifics, not mandated by 754. --- */
 
       /* Ternary operations, with rounding. */
       /* Fused multiply-add/sub, with 112-bit intermediate
-	 precision */
+         precision for ppc.
+         Also used to implement fused multiply-add/sub for s390. */
       /* :: IRRoundingMode(I32) x F64 x F64 x F64 -> F64 
             (computes arg2 * arg3 +/- arg4) */ 
       Iop_MAddF64, Iop_MSubF64,
@@ -676,6 +745,10 @@ typedef
                        from FP result */
 
       /* ------------------ 32-bit SIMD Integer ------------------ */
+
+      /* 32x1 saturating add/sub (ok, well, not really SIMD :) */
+      Iop_QAdd32S,
+      Iop_QSub32S,
 
       /* 16x2 add/sub, also signed/unsigned saturating variants */
       Iop_Add16x2, Iop_Sub16x2,
@@ -839,10 +912,30 @@ typedef
       Iop_QShlN8x8, Iop_QShlN16x4, Iop_QShlN32x2, Iop_QShlN64x1,
       Iop_QSalN8x8, Iop_QSalN16x4, Iop_QSalN32x2, Iop_QSalN64x1,
 
-      /* NARROWING -- narrow 2xI64 into 1xI64, hi half from left arg */
-      Iop_QNarrow16Ux4,
-      Iop_QNarrow16Sx4,
-      Iop_QNarrow32Sx2,
+      /* NARROWING (binary) 
+         -- narrow 2xI64 into 1xI64, hi half from left arg */
+      /* For saturated narrowing, I believe there are 4 variants of
+         the basic arithmetic operation, depending on the signedness
+         of argument and result.  Here are examples that exemplify
+         what I mean:
+
+         QNarrow16Uto8U ( UShort x )  if (x >u 255) x = 255;
+                                      return x[7:0];
+
+         QNarrow16Sto8S ( Short x )   if (x <s -128) x = -128;
+                                      if (x >s  127) x = 127;
+                                      return x[7:0];
+
+         QNarrow16Uto8S ( UShort x )  if (x >u 127) x = 127;
+                                      return x[7:0];
+
+         QNarrow16Sto8U ( Short x )   if (x <s 0)   x = 0;
+                                      if (x >s 255) x = 255;
+                                      return x[7:0];
+      */
+      Iop_QNarrowBin16Sto8Ux8,
+      Iop_QNarrowBin16Sto8Sx8, Iop_QNarrowBin32Sto16Sx4,
+      Iop_NarrowBin16to8x8,    Iop_NarrowBin32to16x4,
 
       /* INTERLEAVING */
       /* Interleave lanes from low or high halves of
@@ -901,6 +994,140 @@ typedef
       /* Vector Reciprocal Estimate and Vector Reciprocal Square Root Estimate
          See floating-point equiwalents for details. */
       Iop_Recip32x2, Iop_Rsqrte32x2,
+
+      /* ------------------ Decimal Floating Point ------------------ */
+
+      /* ARITHMETIC INSTRUCTIONS   64-bit
+	 ----------------------------------
+	 IRRoundingModeDFP(I32) X D64 X D64 -> D64
+      */
+      Iop_AddD64, Iop_SubD64, Iop_MulD64, Iop_DivD64,
+
+      /* ARITHMETIC INSTRUCTIONS  128-bit
+	 ----------------------------------
+	 IRRoundingModeDFP(I32) X D128 X D128 -> D128
+      */
+      Iop_AddD128, Iop_SubD128, Iop_MulD128, Iop_DivD128,
+
+      /* SHIFT SIGNIFICAND INSTRUCTIONS
+       *    The DFP significand is shifted by the number of digits specified
+       *    by the U8 operand.  Digits shifted out of the leftmost digit are
+       *    lost. Zeros are supplied to the vacated positions on the right.
+       *    The sign of the result is the same as the sign of the original
+       *    operand.
+       *
+       * D64 x U8  -> D64    left shift and right shift respectively */
+      Iop_ShlD64, Iop_ShrD64,
+
+      /* D128 x U8  -> D128  left shift and right shift respectively */
+      Iop_ShlD128, Iop_ShrD128,
+
+
+      /* FORMAT CONVERSION INSTRUCTIONS
+       *   D32 -> D64
+       */
+      Iop_D32toD64,
+
+      /*   D64 -> D128 */
+      Iop_D64toD128, 
+
+      /*   I64S -> D128 */
+      Iop_I64StoD128, 
+
+      /*   IRRoundingModeDFP(I32) x D64 -> D32 */
+      Iop_D64toD32,
+
+      /*   IRRoundingModeDFP(I32) x D128 -> D64 */
+      Iop_D128toD64,
+
+      /*   IRRoundingModeDFP(I32) x I64 -> D64 */
+      Iop_I64StoD64,
+
+      /*   IRRoundingModeDFP(I32) x D64 -> I64 */
+      Iop_D64toI64S,
+
+      /*   IRRoundingModeDFP(I32) x D128 -> I64 */
+      Iop_D128toI64S,
+
+      /* ROUNDING INSTRUCTIONS
+       * IRRoundingMode(I32) x D64 -> D64
+       * The D64 operand, if a finite number, is rounded to an integer value.
+       */
+      Iop_RoundD64toInt,
+
+      /* IRRoundingMode(I32) x D128 -> D128 */
+      Iop_RoundD128toInt,
+
+      /* COMPARE INSTRUCTIONS
+       * D64 x D64 -> IRCmpD64Result(I32) */
+      Iop_CmpD64,
+
+      /* D128 x D128 -> IRCmpD64Result(I32) */
+      Iop_CmpD128,
+
+      /* QUANTIZE AND ROUND INSTRUCTIONS
+       * The source operand is converted and rounded to the form with the 
+       * immediate exponent specified by the rounding and exponent parameter.
+       *
+       * The second operand is converted and rounded to the form
+       * of the first operand's exponent and the rounded based on the specified
+       * rounding mode parameter.
+       *
+       * IRRoundingModeDFP(I32) x D64 x D64-> D64 */
+      Iop_QuantizeD64,
+
+      /* IRRoundingModeDFP(I32) x D128 x D128 -> D128 */
+      Iop_QuantizeD128,
+
+      /* IRRoundingModeDFP(I32) x I8 x D64 -> D64
+       *    The Decimal Floating point operand is rounded to the requested 
+       *    significance given by the I8 operand as specified by the rounding 
+       *    mode.
+       */
+      Iop_SignificanceRoundD64,
+
+      /* IRRoundingModeDFP(I32) x I8 x D128 -> D128 */
+      Iop_SignificanceRoundD128,
+
+      /* EXTRACT AND INSERT INSTRUCTIONS
+       * D64 -> I64
+       *    The exponent of the D32 or D64 operand is extracted.  The 
+       *    extracted exponent is converted to a 64-bit signed binary integer.
+       */
+      Iop_ExtractExpD64,
+
+      /* D128 -> I64 */
+      Iop_ExtractExpD128,
+
+      /* I64 x I64  -> D64 
+       *    The exponent is specified by the first I64 operand the signed
+       *    significand is given by the second I64 value.  The result is a D64
+       *    value consisting of the specified significand and exponent whose 
+       *    sign is that of the specified significand.
+       */
+      Iop_InsertExpD64,
+
+      /* I64 x I128 -> D128 */
+      Iop_InsertExpD128,
+
+      /* Support for 128-bit DFP type */
+      Iop_D64HLtoD128, Iop_D128HItoD64, Iop_D128LOtoD64,
+
+      /*  I64 -> I64  
+       *     Convert 50-bit densely packed BCD string to 60 bit BCD string
+       */
+      Iop_DPBtoBCD,
+
+      /* I64 -> I64
+       *     Convert 60 bit BCD string to 50-bit densely packed BCD string
+       */
+      Iop_BCDtoDPB,
+
+      /* Conversion I64 -> D64 */
+      Iop_ReinterpI64asD64,
+
+      /* Conversion D64 -> I64 */
+      Iop_ReinterpD64asI64,
 
       /* ------------------ 128-bit SIMD FP. ------------------ */
 
@@ -961,6 +1188,7 @@ typedef
       Iop_Fixed32UToF32x4_RN, Iop_Fixed32SToF32x4_RN, /* fixed-point -> fp */
 
       /* --- Single to/from half conversion --- */
+      /* FIXME: what kind of rounding in F32x4 -> F16x4 case? */
       Iop_F32toF16x4, Iop_F16toF32x4,         /* F32x4 <-> F16x4      */
 
       /* --- 32x4 lowest-lane-only scalar FP --- */
@@ -1089,7 +1317,7 @@ typedef
       Iop_Min8Ux16, Iop_Min16Ux8, Iop_Min32Ux4,
 
       /* COMPARISON */
-      Iop_CmpEQ8x16,  Iop_CmpEQ16x8,  Iop_CmpEQ32x4,
+      Iop_CmpEQ8x16,  Iop_CmpEQ16x8,  Iop_CmpEQ32x4,  Iop_CmpEQ64x2,
       Iop_CmpGT8Sx16, Iop_CmpGT16Sx8, Iop_CmpGT32Sx4, Iop_CmpGT64Sx2,
       Iop_CmpGT8Ux16, Iop_CmpGT16Ux8, Iop_CmpGT32Ux4,
 
@@ -1119,30 +1347,32 @@ typedef
       Iop_QShlN8x16, Iop_QShlN16x8, Iop_QShlN32x4, Iop_QShlN64x2,
       Iop_QSalN8x16, Iop_QSalN16x8, Iop_QSalN32x4, Iop_QSalN64x2,
 
-      /* NARROWING -- narrow 2xV128 into 1xV128, hi half from left arg */
-      /* Note: the 16{U,S} and 32{U,S} are the pre-narrow lane widths. */
-      Iop_QNarrow16Ux8, Iop_QNarrow32Ux4,
-      Iop_QNarrow16Sx8, Iop_QNarrow32Sx4,
-      Iop_Narrow16x8, Iop_Narrow32x4,
-      /* Shortening V128->I64, lo half from each element */
-      Iop_Shorten16x8, Iop_Shorten32x4, Iop_Shorten64x2,
-      /* Saturating shortening from signed source to signed/unsigned destination */
-      Iop_QShortenS16Sx8, Iop_QShortenS32Sx4, Iop_QShortenS64Sx2,
-      Iop_QShortenU16Sx8, Iop_QShortenU32Sx4, Iop_QShortenU64Sx2,
-      /* Saturating shortening from unsigned source to unsigned destination */
-      Iop_QShortenU16Ux8, Iop_QShortenU32Ux4, Iop_QShortenU64Ux2,
+      /* NARROWING (binary) 
+         -- narrow 2xV128 into 1xV128, hi half from left arg */
+      /* See comments above w.r.t. U vs S issues in saturated narrowing. */
+      Iop_QNarrowBin16Sto8Ux16, Iop_QNarrowBin32Sto16Ux8,
+      Iop_QNarrowBin16Sto8Sx16, Iop_QNarrowBin32Sto16Sx8,
+      Iop_QNarrowBin16Uto8Ux16, Iop_QNarrowBin32Uto16Ux8,
+      Iop_NarrowBin16to8x16, Iop_NarrowBin32to16x8,
 
-      /* WIDENING */
-      /* Longening --- sign or zero extends each element of the argument
-         vector to the twice original size. The resulting vector consists of
+      /* NARROWING (unary) -- narrow V128 into I64 */
+      Iop_NarrowUn16to8x8, Iop_NarrowUn32to16x4, Iop_NarrowUn64to32x2,
+      /* Saturating narrowing from signed source to signed/unsigned destination */
+      Iop_QNarrowUn16Sto8Sx8, Iop_QNarrowUn32Sto16Sx4, Iop_QNarrowUn64Sto32Sx2,
+      Iop_QNarrowUn16Sto8Ux8, Iop_QNarrowUn32Sto16Ux4, Iop_QNarrowUn64Sto32Ux2,
+      /* Saturating narrowing from unsigned source to unsigned destination */
+      Iop_QNarrowUn16Uto8Ux8, Iop_QNarrowUn32Uto16Ux4, Iop_QNarrowUn64Uto32Ux2,
+
+      /* WIDENING -- sign or zero extend each element of the argument
+         vector to the twice original size.  The resulting vector consists of
          the same number of elements but each element and the vector itself
-         are two times wider.
+         are twice as wide.
          All operations are I64->V128.
          Example
-            Iop_Longen32Sx2( [a, b] ) = [c, d]
+            Iop_Widen32Sto64x2( [a, b] ) = [c, d]
                where c = Iop_32Sto64(a) and d = Iop_32Sto64(b) */
-      Iop_Longen8Ux8, Iop_Longen16Ux4, Iop_Longen32Ux2,
-      Iop_Longen8Sx8, Iop_Longen16Sx4, Iop_Longen32Sx2,
+      Iop_Widen8Uto16x8, Iop_Widen16Uto32x4, Iop_Widen32Uto64x2,
+      Iop_Widen8Sto16x8, Iop_Widen16Sto32x4, Iop_Widen32Sto64x2,
 
       /* INTERLEAVING */
       /* Interleave lanes from low or high halves of
@@ -1193,10 +1423,52 @@ typedef
          argR[i] values may only be in the range 0 .. 15, else behaviour
          is undefined. */
       Iop_Perm8x16,
+      Iop_Perm32x4, /* ditto, except argR values are restricted to 0 .. 3 */
 
       /* Vector Reciprocal Estimate and Vector Reciprocal Square Root Estimate
          See floating-point equiwalents for details. */
-      Iop_Recip32x4, Iop_Rsqrte32x4
+      Iop_Recip32x4, Iop_Rsqrte32x4,
+
+      /* ------------------ 256-bit SIMD Integer. ------------------ */
+
+      /* Pack/unpack */
+      Iop_V256to64_0,  // V256 -> I64, extract least significant lane
+      Iop_V256to64_1,
+      Iop_V256to64_2,
+      Iop_V256to64_3,  // V256 -> I64, extract most significant lane
+
+      Iop_64x4toV256,  // (I64,I64,I64,I64)->V256
+                       // first arg is most significant lane
+
+      Iop_V256toV128_0, // V256 -> V128, less significant lane
+      Iop_V256toV128_1, // V256 -> V128, more significant lane
+      Iop_V128HLtoV256, // (V128,V128)->V256, first arg is most signif
+
+      Iop_AndV256,
+      Iop_OrV256,
+      Iop_XorV256,
+      Iop_NotV256,
+
+      /* MISC (vector integer cmp != 0) */
+      Iop_CmpNEZ32x8, Iop_CmpNEZ64x4,
+
+      /* ------------------ 256-bit SIMD FP. ------------------ */
+      Iop_Add64Fx4,
+      Iop_Sub64Fx4,
+      Iop_Mul64Fx4,
+      Iop_Div64Fx4,
+      Iop_Add32Fx8,
+      Iop_Sub32Fx8,
+      Iop_Mul32Fx8,
+      Iop_Div32Fx8,
+
+      Iop_Sqrt32Fx8,
+      Iop_Sqrt64Fx4,
+      Iop_RSqrt32Fx8,
+      Iop_Recip32Fx8,
+
+      Iop_Max32Fx8, Iop_Min32Fx8,
+      Iop_Max64Fx4, Iop_Min64Fx4
    }
    IROp;
 
@@ -1217,6 +1489,27 @@ typedef
    }
    IRRoundingMode;
 
+/* DFP encoding of IEEE754 2008 specified rounding modes extends the two bit
+ * binary floating point rounding mode (IRRoundingMode) to three bits.  The 
+ * DFP rounding modes are a super set of the binary rounding modes.  The 
+ * encoding was chosen such that the mapping of the least significant two bits
+ * of the IR to POWER encodings is same.  The upper IR encoding bit is just
+ * a logical OR of the upper rounding mode bit from the POWER encoding.
+ */
+typedef
+   enum { 
+      Irrm_DFP_NEAREST              = 0,  // Round to nearest, ties to even
+      Irrm_DFP_NegINF               = 1,  // Round to negative infinity
+      Irrm_DFP_PosINF               = 2,  // Round to posative infinity
+      Irrm_DFP_ZERO                 = 3,  // Round toward zero
+      Irrm_DFP_NEAREST_TIE_AWAY_0   = 4,  // Round to nearest, ties away from 0
+      Irrm_DFP_PREPARE_SHORTER      = 5,  // Round to prepare for storter 
+                                          // precision
+      Irrm_DFP_AWAY_FROM_ZERO       = 6,  // Round to away from 0
+      Irrm_DFP_NEAREST_TIE_TOWARD_0 = 7   // Round to nearest, ties towards 0
+   }
+   IRRoundingModeDFP;
+
 /* Floating point comparison result values, as created by Iop_CmpF64.
    This is also derived from what IA32 does. */
 typedef
@@ -1228,8 +1521,14 @@ typedef
    }
    IRCmpF64Result;
 
+typedef IRCmpF64Result IRCmpF32Result;
+typedef IRCmpF64Result IRCmpF128Result;
 
 /* ------------------ Expressions ------------------ */
+
+typedef struct _IRQop   IRQop;   /* forward declaration */
+typedef struct _IRTriop IRTriop; /* forward declaration */
+
 
 /* The different kinds of expressions.  Their meaning is explained below
    in the comments for IRExpr. */
@@ -1334,11 +1633,7 @@ struct _IRExpr {
                       eg. MAddF64r32(t1, t2, t3, t4)
       */
       struct {
-         IROp op;          /* op-code   */
-         IRExpr* arg1;     /* operand 1 */
-         IRExpr* arg2;     /* operand 2 */
-         IRExpr* arg3;     /* operand 3 */
-         IRExpr* arg4;     /* operand 4 */
+        IRQop* details;
       } Qop;
 
       /* A ternary operation.
@@ -1346,10 +1641,7 @@ struct _IRExpr {
                       eg. MulF64(1, 2.0, 3.0)
       */
       struct {
-         IROp op;          /* op-code   */
-         IRExpr* arg1;     /* operand 1 */
-         IRExpr* arg2;     /* operand 2 */
-         IRExpr* arg3;     /* operand 3 */
+        IRTriop* details;
       } Triop;
 
       /* A binary operation.
@@ -1413,6 +1705,9 @@ struct _IRExpr {
          * it may not access guest memory, since that would hide
            guest memory transactions from the instrumenters
 
+         * it must not assume that arguments are being evaluated in a
+           particular order. The oder of evaluation is unspecified.
+
          This is restrictive, but makes the semantics clean, and does
          not interfere with IR optimisation.
 
@@ -1446,6 +1741,23 @@ struct _IRExpr {
          IRExpr* exprX;    /* False expression */
       } Mux0X;
    } Iex;
+};
+
+/* ------------------ A ternary expression ---------------------- */
+struct _IRTriop {
+   IROp op;          /* op-code   */
+   IRExpr* arg1;     /* operand 1 */
+   IRExpr* arg2;     /* operand 2 */
+   IRExpr* arg3;     /* operand 3 */
+};
+
+/* ------------------ A quarternary expression ------------------ */
+struct _IRQop {
+   IROp op;          /* op-code   */
+   IRExpr* arg1;     /* operand 1 */
+   IRExpr* arg2;     /* operand 2 */
+   IRExpr* arg3;     /* operand 3 */
+   IRExpr* arg4;     /* operand 4 */
 };
 
 /* Expression constructors. */
@@ -1543,8 +1855,9 @@ extern Bool eqIRAtom ( IRExpr*, IRExpr* );
    guest to restart a syscall that has been interrupted by a signal.
 */
 typedef
-   enum { 
-      Ijk_Boring=0x16000, /* not interesting; just goto next */
+   enum {
+      Ijk_INVALID=0x16000, 
+      Ijk_Boring,         /* not interesting; just goto next */
       Ijk_Call,           /* guest is doing a call */
       Ijk_Ret,            /* guest is doing a return */
       Ijk_ClientReq,      /* do guest client req before continuing */
@@ -1610,9 +1923,9 @@ extern void ppIRJumpKind ( IRJumpKind );
    call does not access guest state.
 
    IMPORTANT NOTE re GUARDS: Dirty calls are strict, very strict.  The
-   arguments are evaluated REGARDLESS of the guard value.  It is
-   unspecified the relative order of arg evaluation and guard
-   evaluation.
+   arguments are evaluated REGARDLESS of the guard value.  The order of
+   argument evaluation is unspecified. The guard expression is evaluated
+   AFTER the arguments have been evaluated.
 */
 
 #define VEX_N_FXSTATE  7   /* enough for FXSAVE/FXRSTOR on x86 */
@@ -1620,7 +1933,7 @@ extern void ppIRJumpKind ( IRJumpKind );
 /* Effects on resources (eg. registers, memory locations) */
 typedef
    enum {
-      Ifx_None = 0x17000,   /* no effect */
+      Ifx_None = 0x1700,    /* no effect */
       Ifx_Read,             /* reads the resource */
       Ifx_Write,            /* writes the resource */
       Ifx_Modify,           /* modifies the resource */
@@ -1632,8 +1945,13 @@ extern void ppIREffect ( IREffect );
 
 
 typedef
-   struct {
-      /* What to call, and details of args/results */
+   struct _IRDirty {
+      /* What to call, and details of args/results.  .guard must be
+         non-NULL.  If .tmp is not IRTemp_INVALID (that is, the call
+         returns a result) then .guard must be demonstrably (at
+         JIT-time) always true, that is, the call must be
+         unconditional.  Conditional calls that assign .tmp are not
+         allowed. */
       IRCallee* cee;    /* where to call */
       IRExpr*   guard;  /* :: Ity_Bit.  Controls whether call happens */
       IRExpr**  args;   /* arg list, ends in NULL */
@@ -1648,10 +1966,26 @@ typedef
       Bool needsBBP; /* True => also pass guest state ptr to callee */
       Int  nFxState; /* must be 0 .. VEX_N_FXSTATE */
       struct {
-         IREffect fx;   /* read, write or modify?  Ifx_None is invalid. */
-         Int      offset;
-         Int      size;
+         IREffect fx:16;   /* read, write or modify?  Ifx_None is invalid. */
+         UShort   offset;
+         UShort   size;
+         UChar    nRepeats;
+         UChar    repeatLen;
       } fxState[VEX_N_FXSTATE];
+      /* The access can be repeated, as specified by nRepeats and
+         repeatLen.  To describe only a single access, nRepeats and
+         repeatLen should be zero.  Otherwise, repeatLen must be a
+         multiple of size and greater than size. */
+      /* Overall, the parts of the guest state denoted by (offset,
+         size, nRepeats, repeatLen) is
+               [offset, +size)
+            and, if nRepeats > 0,
+               for (i = 1; i <= nRepeats; i++)
+                  [offset + i * repeatLen, +size)
+         A convenient way to enumerate all segments is therefore
+            for (i = 0; i < 1 + nRepeats; i++)
+               [offset + i * repeatLen, +size)
+      */
    }
    IRDirty;
 
@@ -1687,6 +2021,10 @@ IRDirty* unsafeIRDirty_1_N ( IRTemp dst,
 typedef
    enum { 
       Imbe_Fence=0x18000, 
+      /* Needed only on ARM.  It cancels a reservation made by a
+         preceding Linked-Load, and needs to be handed through to the
+         back end, just as LL and SC themselves are. */
+      Imbe_CancelReservation
    }
    IRMBusEvent;
 
@@ -1780,6 +2118,24 @@ extern IRCAS* mkIRCAS ( IRTemp oldHi, IRTemp oldLo,
 
 extern IRCAS* deepCopyIRCAS ( IRCAS* );
 
+
+/* ------------------ Circular Array Put ------------------ */
+typedef
+   struct {
+      IRRegArray* descr; /* Part of guest state treated as circular */
+      IRExpr*     ix;    /* Variable part of index into array */
+      Int         bias;  /* Constant offset part of index into array */
+      IRExpr*     data;  /* The value to write */
+   } IRPutI;
+
+extern void ppIRPutI ( IRPutI* puti );
+
+extern IRPutI* mkIRPutI ( IRRegArray* descr, IRExpr* ix,
+                          Int bias, IRExpr* data );
+
+extern IRPutI* deepCopyIRPutI ( IRPutI* );
+
+
 /* ------------------ Statements ------------------ */
 
 /* The different kinds of statements.  Their meaning is explained
@@ -1836,12 +2192,27 @@ typedef
             the IRSB).  Contains the address and length of the
             instruction.
 
-            ppIRStmt output: ------ IMark(<addr>, <len>) ------,
-                         eg. ------ IMark(0x4000792, 5) ------,
+            It also contains a delta value.  The delta must be
+            subtracted from a guest program counter value before
+            attempting to establish, by comparison with the address
+            and length values, whether or not that program counter
+            value refers to this instruction.  For x86, amd64, ppc32,
+            ppc64 and arm, the delta value is zero.  For Thumb
+            instructions, the delta value is one.  This is because, on
+            Thumb, guest PC values (guest_R15T) are encoded using the
+            top 31 bits of the instruction address and a 1 in the lsb;
+            hence they appear to be (numerically) 1 past the start of
+            the instruction they refer to.  IOW, guest_R15T on ARM
+            holds a standard ARM interworking address.
+
+            ppIRStmt output: ------ IMark(<addr>, <len>, <delta>) ------,
+                         eg. ------ IMark(0x4000792, 5, 0) ------,
          */
          struct {
             Addr64 addr;   /* instruction address */
             Int    len;    /* instruction length */
+            UChar  delta;  /* addr = program counter as encoded in guest state
+                                     - delta */
          } IMark;
 
          /* META: An ABI hint, which says something about this
@@ -1880,10 +2251,7 @@ typedef
                          eg. PUTI(64:8xF64)[t5,0] = t1
          */
          struct {
-            IRRegArray* descr; /* Part of guest state treated as circular */
-            IRExpr*     ix;    /* Variable part of index into array */
-            Int         bias;  /* Constant offset part of index into array */
-            IRExpr*     data;  /* The value to write */
+            IRPutI* details;
          } PutI;
 
          /* Assign a value to a temporary.  Note that SSA rules require
@@ -2006,11 +2374,15 @@ typedef
          /* Conditional exit from the middle of an IRSB.
             ppIRStmt output: if (<guard>) goto {<jk>} <dst>
                          eg. if (t69) goto {Boring} 0x4000AAA:I32
+            If <guard> is true, the guest state is also updated by
+            PUT-ing <dst> at <offsIP>.  This is done because a
+            taken exit must update the guest program counter.
          */
          struct {
             IRExpr*    guard;    /* Conditional expression */
-            IRJumpKind jk;       /* Jump kind */
             IRConst*   dst;      /* Jump target (constant only) */
+            IRJumpKind jk;       /* Jump kind */
+            Int        offsIP;   /* Guest state offset for IP */
          } Exit;
       } Ist;
    }
@@ -2018,11 +2390,10 @@ typedef
 
 /* Statement constructors. */
 extern IRStmt* IRStmt_NoOp    ( void );
-extern IRStmt* IRStmt_IMark   ( Addr64 addr, Int len );
+extern IRStmt* IRStmt_IMark   ( Addr64 addr, Int len, UChar delta );
 extern IRStmt* IRStmt_AbiHint ( IRExpr* base, Int len, IRExpr* nia );
 extern IRStmt* IRStmt_Put     ( Int off, IRExpr* data );
-extern IRStmt* IRStmt_PutI    ( IRRegArray* descr, IRExpr* ix, Int bias, 
-                                IRExpr* data );
+extern IRStmt* IRStmt_PutI    ( IRPutI* details );
 extern IRStmt* IRStmt_WrTmp   ( IRTemp tmp, IRExpr* data );
 extern IRStmt* IRStmt_Store   ( IREndness end, IRExpr* addr, IRExpr* data );
 extern IRStmt* IRStmt_CAS     ( IRCAS* details );
@@ -2030,7 +2401,8 @@ extern IRStmt* IRStmt_LLSC    ( IREndness end, IRTemp result,
                                 IRExpr* addr, IRExpr* storedata );
 extern IRStmt* IRStmt_Dirty   ( IRDirty* details );
 extern IRStmt* IRStmt_MBE     ( IRMBusEvent event );
-extern IRStmt* IRStmt_Exit    ( IRExpr* guard, IRJumpKind jk, IRConst* dst );
+extern IRStmt* IRStmt_Exit    ( IRExpr* guard, IRJumpKind jk, IRConst* dst,
+                                Int offsIP );
 
 /* Deep-copy an IRStmt. */
 extern IRStmt* deepCopyIRStmt ( IRStmt* );
@@ -2075,6 +2447,8 @@ extern void ppIRTypeEnv ( IRTypeEnv* );
      executes all the way to the end, without a side exit
    - An indication of any special actions (JumpKind) needed
      for this final jump.
+   - Offset of the IP field in the guest state.  This will be
+     updated before the final jump is done.
    
    "IRSB" stands for "IR Super Block".
 */
@@ -2086,6 +2460,7 @@ typedef
       Int        stmts_used;
       IRExpr*    next;
       IRJumpKind jumpkind;
+      Int        offsIP;
    }
    IRSB;
 

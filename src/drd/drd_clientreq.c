@@ -1,8 +1,7 @@
-/* -*- mode: C; c-basic-offset: 3; -*- */
 /*
   This file is part of drd, a thread error detector.
 
-  Copyright (C) 2006-2010 Bart Van Assche <bvanassche@acm.org>.
+  Copyright (C) 2006-2012 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -45,6 +44,11 @@
 #include "pub_tool_tooliface.h"   // VG_(needs_...)()
 
 
+/* Global variables. */
+
+Bool DRD_(g_free_is_write);
+
+
 /* Local function declarations. */
 
 static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret);
@@ -65,6 +69,12 @@ void DRD_(clientreq_init)(void)
  * DRD's handler for Valgrind client requests. The code below handles both
  * DRD's public and tool-internal client requests.
  */
+#if defined(VGP_mips32_linux)
+ /* There is a cse related issue in gcc for MIPS. Optimization level
+    has to be lowered, so cse related optimizations are not
+    included. */
+ __attribute__((optimize("O1")))
+#endif
 static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
 {
    UWord result = 0;
@@ -76,12 +86,40 @@ static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
    switch (arg[0])
    {
    case VG_USERREQ__MALLOCLIKE_BLOCK:
+      if (DRD_(g_free_is_write)) {
+         GenericErrInfo GEI = {
+            .tid = DRD_(thread_get_running_tid)(),
+            .addr = 0,
+         };
+         VG_(maybe_record_error)(vg_tid,
+                                 GenericErr,
+                                 VG_(get_IP)(vg_tid),
+                                 "--free-is-write=yes is incompatible with"
+                                 " custom memory allocator client requests",
+                                 &GEI);
+      }
       if (arg[1])
          DRD_(malloclike_block)(vg_tid, arg[1]/*addr*/, arg[2]/*size*/);
       break;
 
+   case VG_USERREQ__RESIZEINPLACE_BLOCK:
+      if (!DRD_(freelike_block)(vg_tid, arg[1]/*addr*/, False))
+      {
+         GenericErrInfo GEI = {
+            .tid = DRD_(thread_get_running_tid)(),
+            .addr = 0,
+         };
+         VG_(maybe_record_error)(vg_tid,
+                                 GenericErr,
+                                 VG_(get_IP)(vg_tid),
+                                 "Invalid VG_USERREQ__RESIZEINPLACE_BLOCK request",
+                                 &GEI);
+      }
+      DRD_(malloclike_block)(vg_tid, arg[1]/*addr*/, arg[3]/*newSize*/);
+      break;
+
    case VG_USERREQ__FREELIKE_BLOCK:
-      if (arg[1] && ! DRD_(freelike_block)(vg_tid, arg[1]/*addr*/))
+      if (arg[1] && ! DRD_(freelike_block)(vg_tid, arg[1]/*addr*/, False))
       {
          GenericErrInfo GEI = {
 	    .tid = DRD_(thread_get_running_tid)(),
@@ -188,7 +226,7 @@ static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
       break;
 
    case VG_USERREQ__DRD_START_TRACE_ADDR:
-      DRD_(start_tracing_address_range)(arg[1], arg[1] + arg[2]);
+      DRD_(start_tracing_address_range)(arg[1], arg[1] + arg[2], False);
       break;
 
    case VG_USERREQ__DRD_STOP_TRACE_ADDR:
@@ -210,9 +248,20 @@ static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
       break;
 
    case VG_USERREQ__SET_JOINABLE:
-      DRD_(thread_set_joinable)(DRD_(PtThreadIdToDrdThreadId)(arg[1]),
-                                (Bool)arg[2]);
+   {
+      const DrdThreadId drd_joinable = DRD_(PtThreadIdToDrdThreadId)(arg[1]);
+      if (drd_joinable != DRD_INVALID_THREADID)
+         DRD_(thread_set_joinable)(drd_joinable, (Bool)arg[2]);
+      else {
+         InvalidThreadIdInfo ITI = { DRD_(thread_get_running_tid)(), arg[1] };
+         VG_(maybe_record_error)(vg_tid,
+                                 InvalidThreadId,
+                                 VG_(get_IP)(vg_tid),
+                                 "pthread_detach(): invalid thread ID",
+                                 &ITI);
+      }
       break;
+   }
 
    case VG_USERREQ__ENTERING_PTHREAD_CREATE:
       DRD_(thread_entering_pthread_create)(drd_tid);

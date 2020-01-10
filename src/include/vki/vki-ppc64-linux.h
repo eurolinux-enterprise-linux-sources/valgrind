@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2005-2010 Julian Seward
+   Copyright (C) 2005-2012 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -386,6 +386,18 @@ struct vki_sigcontext {
 #define VKI_F_SETSIG        10      /*  for sockets. */
 #define VKI_F_GETSIG        11      /*  for sockets. */
 
+#define VKI_F_SETOWN_EX		15
+#define VKI_F_GETOWN_EX		16
+
+#define VKI_F_OWNER_TID		0
+#define VKI_F_OWNER_PID		1
+#define VKI_F_OWNER_PGRP	2
+
+struct vki_f_owner_ex {
+	int	type;
+	__vki_kernel_pid_t	pid;
+};
+
 /* for F_[GET|SET]FL */
 #define VKI_FD_CLOEXEC  1  /* actually anything with low bit set goes */
 
@@ -620,6 +632,7 @@ struct vki_termios {
 #define VKI_FIOASYNC        _VKI_IOW('f', 125, int)
 #define VKI_TIOCSERGETLSR   0x5459 /* Get line status register */
 #define VKI_TIOCGICOUNT	    0x545D /* read serial port inline interrupt counts */
+#define VKI_FIOQSIZE        _VKI_IOR('f', 128, vki_loff_t)
 
 //----------------------------------------------------------------------
 // From linux-2.6.13/include/asm-ppc64/poll.h

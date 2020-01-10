@@ -1,6 +1,6 @@
 include $(top_srcdir)/Makefile.tool.am
 
-EXTRA_DIST = docs/drd-manual.xml
+EXTRA_DIST = docs/drd-manual.xml docs/drd-xml-output.xsd
 
 #----------------------------------------------------------------------------
 # Headers, flags
@@ -54,7 +54,6 @@ endif
 
 DRD_SOURCES_COMMON =    \
   drd_barrier.c         \
-  drd_bitmap2_node.c    \
   drd_clientobj.c       \
   drd_clientreq.c       \
   drd_cond.c            \
@@ -126,6 +125,10 @@ VGPRELOAD_DRD_SOURCES_COMMON = \
   drd_pthread_intercepts.c     \
   drd_qtcore_intercepts.c      \
   drd_strmem_intercepts.c
+
+if VGCONF_OS_IS_DARWIN
+VGPRELOAD_DRD_SOURCES_COMMON += drd_darwin_intercepts.c
+endif
 
 vgpreload_drd_@VGCONF_ARCH_PRI@_@VGCONF_OS@_so_SOURCES      = \
 	$(VGPRELOAD_DRD_SOURCES_COMMON)

@@ -8,7 +8,7 @@
    This file is part of Cachegrind, a Valgrind tool for cache
    profiling programs.
 
-   Copyright (C) 2002-2010 Nicholas Nethercote
+   Copyright (C) 2002-2012 Nicholas Nethercote
       njn@valgrind.org
 
    This program is free software; you can redistribute it and/or
@@ -68,6 +68,12 @@
 static Bool  clo_cache_sim  = True;  /* do cache simulation? */
 static Bool  clo_branch_sim = False; /* do branch simulation? */
 static Char* clo_cachegrind_out_file = "cachegrind.out.%p";
+
+/*------------------------------------------------------------*/
+/*--- Cachesim configuration                               ---*/
+/*------------------------------------------------------------*/
+
+static Int min_line_size = 0; /* min of L1 and LL cache line sizes */
 
 /*------------------------------------------------------------*/
 /*--- Types and Data Structures                            ---*/
@@ -846,7 +852,7 @@ void addEvent_Dr ( CgState* cgs, InstrInfo* inode, Int datasize, IRAtom* ea )
 {
    Event* evt;
    tl_assert(isIRAtom(ea));
-   tl_assert(datasize >= 1 && datasize <= MIN_LINE_SIZE);
+   tl_assert(datasize >= 1 && datasize <= min_line_size);
    if (!clo_cache_sim)
       return;
    if (cgs->events_used == N_EVENTS)
@@ -868,7 +874,7 @@ void addEvent_Dw ( CgState* cgs, InstrInfo* inode, Int datasize, IRAtom* ea )
    Event* evt;
 
    tl_assert(isIRAtom(ea));
-   tl_assert(datasize >= 1 && datasize <= MIN_LINE_SIZE);
+   tl_assert(datasize >= 1 && datasize <= min_line_size);
 
    if (!clo_cache_sim)
       return;
@@ -1058,8 +1064,8 @@ IRSB* cg_instrument ( VgCallbackClosure* closure,
                // instructions will be done inaccurately, but they're
                // very rare and this avoids errors from hitting more
                // than two cache lines in the simulation.
-               if (dataSize > MIN_LINE_SIZE)
-                  dataSize = MIN_LINE_SIZE;
+               if (dataSize > min_line_size)
+                  dataSize = min_line_size;
                if (d->mFx == Ifx_Read || d->mFx == Ifx_Modify)
                   addEvent_Dr( &cgs, curr_inode, dataSize, d->mAddr );
                if (d->mFx == Ifx_Write || d->mFx == Ifx_Modify)
@@ -1085,8 +1091,8 @@ IRSB* cg_instrument ( VgCallbackClosure* closure,
             if (cas->dataHi != NULL)
                dataSize *= 2; /* since it's a doubleword-CAS */
             /* I don't think this can ever happen, but play safe. */
-            if (dataSize > MIN_LINE_SIZE)
-               dataSize = MIN_LINE_SIZE;
+            if (dataSize > min_line_size)
+               dataSize = min_line_size;
             addEvent_Dr( &cgs, curr_inode, dataSize, cas->addr );
             addEvent_Dw( &cgs, curr_inode, dataSize, cas->addr );
             break;
@@ -1235,82 +1241,6 @@ IRSB* cg_instrument ( VgCallbackClosure* closure,
 static cache_t clo_I1_cache = UNDEFINED_CACHE;
 static cache_t clo_D1_cache = UNDEFINED_CACHE;
 static cache_t clo_LL_cache = UNDEFINED_CACHE;
-
-// Checks cache config is ok.  Returns NULL if ok, or a pointer to an error
-// string otherwise.
-static Char* check_cache(cache_t* cache)
-{
-   // Simulator requires set count to be a power of two.
-   if ((cache->size % (cache->line_size * cache->assoc) != 0) ||
-       (-1 == VG_(log2)(cache->size/cache->line_size/cache->assoc)))
-   {
-      return "Cache set count is not a power of two.\n";
-   }
-
-   // Simulator requires line size to be a power of two.
-   if (-1 == VG_(log2)(cache->line_size)) {
-      return "Cache line size is not a power of two.\n";
-   }
-
-   // Then check line size >= 16 -- any smaller and a single instruction could
-   // straddle three cache lines, which breaks a simulation assertion and is
-   // stupid anyway.
-   if (cache->line_size < MIN_LINE_SIZE) {
-      return "Cache line size is too small.\n";
-   }
-
-   /* Then check cache size > line size (causes seg faults if not). */
-   if (cache->size <= cache->line_size) {
-      return "Cache size <= line size.\n";
-   }
-
-   /* Then check assoc <= (size / line size) (seg faults otherwise). */
-   if (cache->assoc > (cache->size / cache->line_size)) {
-      return "Cache associativity > (size / line size).\n";
-   }
-
-   return NULL;
-}
-
-static 
-void configure_caches(cache_t* I1c, cache_t* D1c, cache_t* LLc)
-{
-#define DEFINED(L)   (-1 != L.size  || -1 != L.assoc || -1 != L.line_size)
-
-   Char* checkRes;
-
-   // Count how many were defined on the command line.
-   Bool all_caches_clo_defined =
-      (DEFINED(clo_I1_cache) &&
-       DEFINED(clo_D1_cache) &&
-       DEFINED(clo_LL_cache));
-
-   // Set the cache config (using auto-detection, if supported by the
-   // architecture).
-   VG_(configure_caches)( I1c, D1c, LLc, all_caches_clo_defined );
-
-   // Check the default/auto-detected values.
-   checkRes = check_cache(I1c);  tl_assert(!checkRes);
-   checkRes = check_cache(D1c);  tl_assert(!checkRes);
-   checkRes = check_cache(LLc);  tl_assert(!checkRes);
-
-   // Then replace with any defined on the command line.  (Already checked in
-   // parse_cache_opt().)
-   if (DEFINED(clo_I1_cache)) { *I1c = clo_I1_cache; }
-   if (DEFINED(clo_D1_cache)) { *D1c = clo_D1_cache; }
-   if (DEFINED(clo_LL_cache)) { *LLc = clo_LL_cache; }
-
-   if (VG_(clo_verbosity) >= 2) {
-      VG_(umsg)("Cache configuration used:\n");
-      VG_(umsg)("  I1: %dB, %d-way, %dB lines\n",
-                I1c->size, I1c->assoc, I1c->line_size);
-      VG_(umsg)("  D1: %dB, %d-way, %dB lines\n",
-                D1c->size, D1c->assoc, D1c->line_size);
-      VG_(umsg)("  LL: %dB, %d-way, %dB lines\n",
-                LLc->size, LLc->assoc, LLc->line_size);
-   }
-#undef CMD_LINE_DEFINED
-}
 
 /*------------------------------------------------------------*/
 /*--- cg_fini() and related function                       ---*/
@@ -1716,53 +1646,12 @@ void cg_discard_superblock_info ( Addr64 orig_addr64, VexGuestExtents vge )
 /*--- Command line processing                                      ---*/
 /*--------------------------------------------------------------------*/
 
-static void parse_cache_opt ( cache_t* cache, Char* opt, Char* optval )
-{
-   Long i1, i2, i3;
-   Char* endptr;
-   Char* checkRes;
-
-   // Option argument looks like "65536,2,64".  Extract them.
-   i1 = VG_(strtoll10)(optval,   &endptr); if (*endptr != ',')  goto bad;
-   i2 = VG_(strtoll10)(endptr+1, &endptr); if (*endptr != ',')  goto bad;
-   i3 = VG_(strtoll10)(endptr+1, &endptr); if (*endptr != '\0') goto bad;
-
-   // Check for overflow.
-   cache->size      = (Int)i1;
-   cache->assoc     = (Int)i2;
-   cache->line_size = (Int)i3;
-   if (cache->size      != i1) goto overflow;
-   if (cache->assoc     != i2) goto overflow;
-   if (cache->line_size != i3) goto overflow;
-
-   checkRes = check_cache(cache);
-   if (checkRes) {
-      VG_(fmsg)("%s", checkRes);
-      goto bad;
-   }
-
-   return;
-
-  bad:
-   VG_(fmsg_bad_option)(opt, "");
-
-  overflow:
-   VG_(fmsg_bad_option)(opt,
-      "One of the cache parameters was too large and overflowed.\n");
-}
-
 static Bool cg_process_cmd_line_option(Char* arg)
 {
-   Char* tmp_str;
-
-   // 5 is length of "--I1="
-   if      VG_STR_CLO(arg, "--I1", tmp_str)
-      parse_cache_opt(&clo_I1_cache, arg, tmp_str);
-   else if VG_STR_CLO(arg, "--D1", tmp_str)
-      parse_cache_opt(&clo_D1_cache, arg, tmp_str);
-   else if (VG_STR_CLO(arg, "--L2", tmp_str) || // for backwards compatibility
-            VG_STR_CLO(arg, "--LL", tmp_str))
-      parse_cache_opt(&clo_LL_cache, arg, tmp_str);
+   if (VG_(str_clo_cache_opt)(arg,
+                              &clo_I1_cache,
+                              &clo_D1_cache,
+                              &clo_LL_cache)) {}
 
    else if VG_STR_CLO( arg, "--cachegrind-out-file", clo_cachegrind_out_file) {}
    else if VG_BOOL_CLO(arg, "--cache-sim",  clo_cache_sim)  {}
@@ -1775,10 +1664,8 @@ static Bool cg_process_cmd_line_option(Char* arg)
 
 static void cg_print_usage(void)
 {
+   VG_(print_cache_clo_opts)();
    VG_(printf)(
-"    --I1=<size>,<assoc>,<line_size>  set I1 cache manually\n"
-"    --D1=<size>,<assoc>,<line_size>  set D1 cache manually\n"
-"    --LL=<size>,<assoc>,<line_size>  set LL cache manually\n"
 "    --cache-sim=yes|no  [yes]        collect cache stats?\n"
 "    --branch-sim=yes|no [no]         collect branch prediction stats?\n"
 "    --cachegrind-out-file=<file>     output file name [cachegrind.out.%%p]\n"
@@ -1804,7 +1691,7 @@ static void cg_pre_clo_init(void)
    VG_(details_version)         (NULL);
    VG_(details_description)     ("a cache and branch-prediction profiler");
    VG_(details_copyright_author)(
-      "Copyright (C) 2002-2010, and GNU GPL'd, by Nicholas Nethercote et al.");
+      "Copyright (C) 2002-2012, and GNU GPL'd, by Nicholas Nethercote et al.");
    VG_(details_bug_reports_to)  (VG_BUGS_TO);
    VG_(details_avg_translation_sizeB) ( 500 );
 
@@ -1838,7 +1725,30 @@ static void cg_post_clo_init(void)
                           VG_(malloc), "cg.main.cpci.3",
                           VG_(free));
 
-   configure_caches(&I1c, &D1c, &LLc);
+   VG_(post_clo_init_configure_caches)(&I1c, &D1c, &LLc,
+                                       &clo_I1_cache,
+                                       &clo_D1_cache,
+                                       &clo_LL_cache);
+
+   // min_line_size is used to make sure that we never feed
+   // accesses to the simulator straddling more than two
+   // cache lines at any cache level
+   min_line_size = (I1c.line_size < D1c.line_size) ? I1c.line_size : D1c.line_size;
+   min_line_size = (LLc.line_size < min_line_size) ? LLc.line_size : min_line_size;
+
+   Int largest_load_or_store_size
+      = VG_(machine_get_size_of_largest_guest_register)();
+   if (min_line_size < largest_load_or_store_size) {
+      /* We can't continue, because the cache simulation might
+         straddle more than 2 lines, and it will assert.  So let's
+         just stop before we start. */
+      VG_(umsg)("Cachegrind: cannot continue: the minimum line size (%d)\n",
+                (Int)min_line_size);
+      VG_(umsg)("  must be equal to or larger than the maximum register size (%d)\n",
+                largest_load_or_store_size );
+      VG_(umsg)("  but it is not.  Exiting now.\n");
+      VG_(exit)(1);
+   }
 
    cachesim_I1_initcache(I1c);
    cachesim_D1_initcache(D1c);

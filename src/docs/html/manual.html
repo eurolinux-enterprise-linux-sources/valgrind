@@ -22,10 +22,10 @@
 <div>
 <div><h1 class="title">
 <a name="manual"></a>Valgrind User Manual</h1></div>
-<div><p class="releaseinfo">Release 3.6.0 21 October 2010</p></div>
-<div><p class="copyright">Copyright © 2000-2010 <a class="ulink" href="http://www.valgrind.org/info/developers.html" target="_top">Valgrind Developers</a></p></div>
+<div><p class="releaseinfo">Release 3.8.0 10 August 2012</p></div>
+<div><p class="copyright">Copyright © 2000-2012 <a class="ulink" href="http://www.valgrind.org/info/developers.html" target="_top">Valgrind Developers</a></p></div>
 <div><div class="legalnotice" title="Legal Notice">
-<a name="id570384"></a><p>Email: <a class="ulink" href="mailto:valgrind@valgrind.org" target="_top">valgrind@valgrind.org</a></p>
+<a name="id560383"></a><p>Email: <a class="ulink" href="mailto:valgrind@valgrind.org" target="_top">valgrind@valgrind.org</a></p>
 </div></div>
 </div>
 <hr>
@@ -56,6 +56,7 @@
 <dt><span class="sect2"><a href="manual-core.html#manual-core.defopts">2.6.7. Setting Default Options</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.pthreads">2.7. Support for Threads</a></span></dt>
+<dd><dl><dt><span class="sect2"><a href="manual-core.html#manual-core.pthreads_perf_sched">2.7.1. Scheduling and Multi-Thread Performance</a></span></dt></dl></dd>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.signals">2.8. Handling of Signals</a></span></dt>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.install">2.9. Building and Installing Valgrind</a></span></dt>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.problems">2.10. If You Have Problems</a></span></dt>
@@ -66,15 +67,28 @@
 <dt><span class="chapter"><a href="manual-core-adv.html">3. Using and understanding the Valgrind core: Advanced Topics</a></span></dt>
 <dd><dl>
 <dt><span class="sect1"><a href="manual-core-adv.html#manual-core-adv.clientreq">3.1. The Client Request mechanism</a></span></dt>
-<dt><span class="sect1"><a href="manual-core-adv.html#manual-core-adv.wrapping">3.2. Function wrapping</a></span></dt>
+<dt><span class="sect1"><a href="manual-core-adv.html#manual-core-adv.gdbserver">3.2. Debugging your program using Valgrind gdbserver and GDB</a></span></dt>
 <dd><dl>
-<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.example">3.2.1. A Simple Example</a></span></dt>
-<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.specs">3.2.2. Wrapping Specifications</a></span></dt>
-<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.semantics">3.2.3. Wrapping Semantics</a></span></dt>
-<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.debugging">3.2.4. Debugging</a></span></dt>
-<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.limitations-cf">3.2.5. Limitations - control flow</a></span></dt>
-<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.limitations-sigs">3.2.6. Limitations - original function signatures</a></span></dt>
-<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.examples">3.2.7. Examples</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.gdbserver-simple">3.2.1. Quick Start: debugging in 3 steps</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.gdbserver-concept">3.2.2. Valgrind gdbserver overall organisation</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.gdbserver-gdb">3.2.3. Connecting GDB to a Valgrind gdbserver</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.gdbserver-gdb-android">3.2.4. Connecting to an Android gdbserver</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.gdbserver-commandhandling">3.2.5. Monitor command handling by the Valgrind gdbserver</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.gdbserver-threads">3.2.6. Valgrind gdbserver thread information</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.gdbserver-shadowregisters">3.2.7. Examining and modifying Valgrind shadow registers</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.gdbserver-limitations">3.2.8. Limitations of the Valgrind gdbserver</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.vgdb">3.2.9. vgdb command line options</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.valgrind-monitor-commands">3.2.10. Valgrind monitor commands</a></span></dt>
+</dl></dd>
+<dt><span class="sect1"><a href="manual-core-adv.html#manual-core-adv.wrapping">3.3. Function wrapping</a></span></dt>
+<dd><dl>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.example">3.3.1. A Simple Example</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.specs">3.3.2. Wrapping Specifications</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.semantics">3.3.3. Wrapping Semantics</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.debugging">3.3.4. Debugging</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.limitations-cf">3.3.5. Limitations - control flow</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.limitations-sigs">3.3.6. Limitations - original function signatures</a></span></dt>
+<dt><span class="sect2"><a href="manual-core-adv.html#manual-core-adv.wrapping.examples">3.3.7. Examples</a></span></dt>
 </dl></dd>
 </dl></dd>
 <dt><span class="chapter"><a href="mc-manual.html">4. Memcheck: a memory error detector</a></span></dt>
@@ -100,17 +114,18 @@ function</a></span></dt>
 <dt><span class="sect2"><a href="mc-manual.html#mc-manual.vaddress">4.5.2. Valid-address (A) bits</a></span></dt>
 <dt><span class="sect2"><a href="mc-manual.html#mc-manual.together">4.5.3. Putting it all together</a></span></dt>
 </dl></dd>
-<dt><span class="sect1"><a href="mc-manual.html#mc-manual.clientreqs">4.6. Client Requests</a></span></dt>
-<dt><span class="sect1"><a href="mc-manual.html#mc-manual.mempools">4.7. Memory Pools: describing and working with custom allocators</a></span></dt>
-<dt><span class="sect1"><a href="mc-manual.html#mc-manual.mpiwrap">4.8. Debugging MPI Parallel Programs with Valgrind</a></span></dt>
+<dt><span class="sect1"><a href="mc-manual.html#mc-manual.monitor-commands">4.6. Memcheck Monitor Commands</a></span></dt>
+<dt><span class="sect1"><a href="mc-manual.html#mc-manual.clientreqs">4.7. Client Requests</a></span></dt>
+<dt><span class="sect1"><a href="mc-manual.html#mc-manual.mempools">4.8. Memory Pools: describing and working with custom allocators</a></span></dt>
+<dt><span class="sect1"><a href="mc-manual.html#mc-manual.mpiwrap">4.9. Debugging MPI Parallel Programs with Valgrind</a></span></dt>
 <dd><dl>
-<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.build">4.8.1. Building and installing the wrappers</a></span></dt>
-<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.gettingstarted">4.8.2. Getting started</a></span></dt>
-<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.controlling">4.8.3. Controlling the wrapper library</a></span></dt>
-<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.limitations.functions">4.8.4. Functions</a></span></dt>
-<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.limitations.types">4.8.5. Types</a></span></dt>
-<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.writingwrappers">4.8.6. Writing new wrappers</a></span></dt>
-<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.whattoexpect">4.8.7. What to expect when using the wrappers</a></span></dt>
+<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.build">4.9.1. Building and installing the wrappers</a></span></dt>
+<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.gettingstarted">4.9.2. Getting started</a></span></dt>
+<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.controlling">4.9.3. Controlling the wrapper library</a></span></dt>
+<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.limitations.functions">4.9.4. Functions</a></span></dt>
+<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.limitations.types">4.9.5. Types</a></span></dt>
+<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.writingwrappers">4.9.6. Writing new wrappers</a></span></dt>
+<dt><span class="sect2"><a href="mc-manual.html#mc-manual.mpiwrap.whattoexpect">4.9.7. What to expect when using the wrappers</a></span></dt>
 </dl></dd>
 </dl></dd>
 <dt><span class="chapter"><a href="cg-manual.html">5. Cachegrind: a cache and branch-prediction profiler</a></span></dt>
@@ -171,9 +186,10 @@ function</a></span></dt>
 <dt><span class="sect2"><a href="cl-manual.html#cl-manual.options.simulation">6.3.5. Simulation options</a></span></dt>
 <dt><span class="sect2"><a href="cl-manual.html#cl-manual.options.cachesimulation">6.3.6. Cache simulation options</a></span></dt>
 </dl></dd>
-<dt><span class="sect1"><a href="cl-manual.html#cl-manual.clientrequests">6.4. Callgrind specific client requests</a></span></dt>
-<dt><span class="sect1"><a href="cl-manual.html#cl-manual.callgrind_annotate-options">6.5. callgrind_annotate Command-line Options</a></span></dt>
-<dt><span class="sect1"><a href="cl-manual.html#cl-manual.callgrind_control-options">6.6. callgrind_control Command-line Options</a></span></dt>
+<dt><span class="sect1"><a href="cl-manual.html#cl-manual.monitor-commands">6.4. Callgrind Monitor Commands</a></span></dt>
+<dt><span class="sect1"><a href="cl-manual.html#cl-manual.clientrequests">6.5. Callgrind specific client requests</a></span></dt>
+<dt><span class="sect1"><a href="cl-manual.html#cl-manual.callgrind_annotate-options">6.6. callgrind_annotate Command-line Options</a></span></dt>
+<dt><span class="sect1"><a href="cl-manual.html#cl-manual.callgrind_control-options">6.7. callgrind_control Command-line Options</a></span></dt>
 </dl></dd>
 <dt><span class="chapter"><a href="hg-manual.html">7. Helgrind: a thread error detector</a></span></dt>
 <dd><dl>
@@ -208,13 +224,12 @@ function</a></span></dt>
 <dt><span class="sect2"><a href="drd-manual.html#drd-manual.api-checks">8.2.4. Detected Errors: Misuse of the POSIX threads API</a></span></dt>
 <dt><span class="sect2"><a href="drd-manual.html#drd-manual.clientreqs">8.2.5. Client Requests</a></span></dt>
 <dt><span class="sect2"><a href="drd-manual.html#drd-manual.gnome">8.2.6. Debugging GNOME Programs</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.qt">8.2.7. Debugging Qt Programs</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.boost.thread">8.2.8. Debugging Boost.Thread Programs</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.openmp">8.2.9. Debugging OpenMP Programs</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.cust-mem-alloc">8.2.10. DRD and Custom Memory Allocators</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.drd-versus-memcheck">8.2.11. DRD Versus Memcheck</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.resource-requirements">8.2.12. Resource Requirements</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.effective-use">8.2.13. Hints and Tips for Effective Use of DRD</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.boost.thread">8.2.7. Debugging Boost.Thread Programs</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.openmp">8.2.8. Debugging OpenMP Programs</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.cust-mem-alloc">8.2.9. DRD and Custom Memory Allocators</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.drd-versus-memcheck">8.2.10. DRD Versus Memcheck</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.resource-requirements">8.2.11. Resource Requirements</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.effective-use">8.2.12. Hints and Tips for Effective Use of DRD</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="drd-manual.html#drd-manual.Pthreads">8.3. Using the POSIX Threads API Effectively</a></span></dt>
 <dd><dl>
@@ -241,31 +256,31 @@ function</a></span></dt>
 <dt><span class="sect2"><a href="ms-manual.html#ms-manual.acting">9.2.9. Acting on Massif's Information</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="ms-manual.html#ms-manual.options">9.3. Massif Command-line Options</a></span></dt>
-<dt><span class="sect1"><a href="ms-manual.html#ms-manual.clientreqs">9.4. Massif Client Requests</a></span></dt>
-<dt><span class="sect1"><a href="ms-manual.html#ms-manual.ms_print-options">9.5. ms_print Command-line Options</a></span></dt>
-<dt><span class="sect1"><a href="ms-manual.html#ms-manual.fileformat">9.6. Massif's Output File Format</a></span></dt>
+<dt><span class="sect1"><a href="ms-manual.html#ms-manual.monitor-commands">9.4. Massif Monitor Commands</a></span></dt>
+<dt><span class="sect1"><a href="ms-manual.html#ms-manual.clientreqs">9.5. Massif Client Requests</a></span></dt>
+<dt><span class="sect1"><a href="ms-manual.html#ms-manual.ms_print-options">9.6. ms_print Command-line Options</a></span></dt>
+<dt><span class="sect1"><a href="ms-manual.html#ms-manual.fileformat">9.7. Massif's Output File Format</a></span></dt>
 </dl></dd>
 <dt><span class="chapter"><a href="dh-manual.html">10. DHAT: a dynamic heap analysis tool</a></span></dt>
 <dd><dl>
 <dt><span class="sect1"><a href="dh-manual.html#dh-manual.overview">10.1. Overview</a></span></dt>
 <dt><span class="sect1"><a href="dh-manual.html#dh-manual.understanding">10.2. Understanding DHAT's output</a></span></dt>
 <dd><dl>
-<dt><span class="sect2"><a href="dh-manual.html#id581408">10.2.1. Interpreting the max-live, tot-alloc and deaths fields</a></span></dt>
-<dt><span class="sect2"><a href="dh-manual.html#id572885">10.2.2. Interpreting the acc-ratios fields</a></span></dt>
-<dt><span class="sect2"><a href="dh-manual.html#id600397">10.2.3. Interpreting "Aggregated access counts by offset" data</a></span></dt>
+<dt><span class="sect2"><a href="dh-manual.html#id625080">10.2.1. Interpreting the max-live, tot-alloc and deaths fields</a></span></dt>
+<dt><span class="sect2"><a href="dh-manual.html#id629340">10.2.2. Interpreting the acc-ratios fields</a></span></dt>
+<dt><span class="sect2"><a href="dh-manual.html#id598919">10.2.3. Interpreting "Aggregated access counts by offset" data</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="dh-manual.html#dh-manual.options">10.3. DHAT Command-line Options</a></span></dt>
 </dl></dd>
-<dt><span class="chapter"><a href="pc-manual.html">11. Ptrcheck: an experimental heap, stack and global array overrun detector</a></span></dt>
+<dt><span class="chapter"><a href="sg-manual.html">11. SGCheck: an experimental stack and global array overrun detector</a></span></dt>
 <dd><dl>
-<dt><span class="sect1"><a href="pc-manual.html#pc-manual.overview">11.1. Overview</a></span></dt>
-<dt><span class="sect1"><a href="pc-manual.html#pc-manual.options">11.2. Ptrcheck Command-line Options</a></span></dt>
-<dt><span class="sect1"><a href="pc-manual.html#pc-manual.how-works.heap-checks">11.3. How Ptrcheck Works: Heap Checks</a></span></dt>
-<dt><span class="sect1"><a href="pc-manual.html#pc-manual.how-works.sg-checks">11.4. How Ptrcheck Works: Stack and Global Checks</a></span></dt>
-<dt><span class="sect1"><a href="pc-manual.html#pc-manual.cmp-w-memcheck">11.5. Comparison with Memcheck</a></span></dt>
-<dt><span class="sect1"><a href="pc-manual.html#pc-manual.limitations">11.6. Limitations</a></span></dt>
-<dt><span class="sect1"><a href="pc-manual.html#pc-manual.todo-user-visible">11.7. Still To Do: User-visible Functionality</a></span></dt>
-<dt><span class="sect1"><a href="pc-manual.html#pc-manual.todo-implementation">11.8. Still To Do: Implementation Tidying</a></span></dt>
+<dt><span class="sect1"><a href="sg-manual.html#sg-manual.overview">11.1. Overview</a></span></dt>
+<dt><span class="sect1"><a href="sg-manual.html#sg-manual.options">11.2. SGCheck Command-line Options</a></span></dt>
+<dt><span class="sect1"><a href="sg-manual.html#sg-manual.how-works.sg-checks">11.3. How SGCheck Works</a></span></dt>
+<dt><span class="sect1"><a href="sg-manual.html#sg-manual.cmp-w-memcheck">11.4. Comparison with Memcheck</a></span></dt>
+<dt><span class="sect1"><a href="sg-manual.html#sg-manual.limitations">11.5. Limitations</a></span></dt>
+<dt><span class="sect1"><a href="sg-manual.html#sg-manual.todo-user-visible">11.6. Still To Do: User-visible Functionality</a></span></dt>
+<dt><span class="sect1"><a href="sg-manual.html#sg-manual.todo-implementation">11.7. Still To Do: Implementation Tidying</a></span></dt>
 </dl></dd>
 <dt><span class="chapter"><a href="bbv-manual.html">12. BBV: an experimental basic block vector generation tool</a></span></dt>
 <dd><dl>

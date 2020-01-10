@@ -8,10 +8,10 @@
    This file is part of Callgrind, a Valgrind tool for call graph
    profiling programs.
 
-   Copyright (C) 2002-2010, Josef Weidendorfer (Josef.Weidendorfer@gmx.de)
+   Copyright (C) 2002-2012, Josef Weidendorfer (Josef.Weidendorfer@gmx.de)
 
    This tool is derived from and contains code from Cachegrind
-   Copyright (C) 2002-2010 Nicholas Nethercote (njn@valgrind.org)
+   Copyright (C) 2002-2012 Nicholas Nethercote (njn@valgrind.org)
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -35,7 +35,8 @@
 #include "callgrind.h"
 #include "global.h"
 
-#include <pub_tool_threadstate.h>
+#include "pub_tool_threadstate.h"
+#include "pub_tool_gdbserver.h"
 
 #include "cg_branchpred.c"
 
@@ -50,6 +51,10 @@ Bool CLG_(instrument_state) = True; /* Instrumentation on ? */
 
 /* thread and signal handler specific */
 exec_state CLG_(current_state);
+
+/* min of L1 and LL cache line sizes.  This only gets set to a
+   non-zero value if we are doing cache simulation. */
+Int CLG_(min_line_size) = 0;
 
 
 /*------------------------------------------------------------*/
@@ -612,8 +617,9 @@ void addEvent_Dr ( ClgState* clgs, InstrInfo* inode, Int datasize, IRAtom* ea )
 {
    Event* evt;
    tl_assert(isIRAtom(ea));
-   tl_assert(datasize >= 1 && datasize <= MIN_LINE_SIZE);
+   tl_assert(datasize >= 1);
    if (!CLG_(clo).simulate_cache) return;
+   tl_assert(datasize <= CLG_(min_line_size));
 
    if (clgs->events_used == N_EVENTS)
       flushEvents(clgs);
@@ -633,8 +639,9 @@ void addEvent_Dw ( ClgState* clgs, InstrInfo* inode, Int datasize, IRAtom* ea )
    Event* lastEvt;
    Event* evt;
    tl_assert(isIRAtom(ea));
-   tl_assert(datasize >= 1 && datasize <= MIN_LINE_SIZE);
+   tl_assert(datasize >= 1);
    if (!CLG_(clo).simulate_cache) return;
+   tl_assert(datasize <= CLG_(min_line_size));
 
    /* Is it possible to merge this write with the preceding read? */
    lastEvt = &clgs->events[clgs->events_used-1];
@@ -904,10 +911,9 @@ IRSB* CLG_(instrument)( VgCallbackClosure* closure,
 			VexGuestExtents* vge,
 			IRType gWordTy, IRType hWordTy )
 {
-   Int      i, isize;
+   Int      i;
    IRStmt*  st;
    Addr     origAddr;
-   Addr64   cia; /* address of current insn */
    InstrInfo* curr_inode = NULL;
    ClgState clgs;
    UInt     cJumps = 0;
@@ -943,10 +949,9 @@ IRSB* CLG_(instrument)( VgCallbackClosure* closure,
    st = sbIn->stmts[i];
    CLG_ASSERT(Ist_IMark == st->tag);
 
-   origAddr = (Addr)st->Ist.IMark.addr;
-   cia   = st->Ist.IMark.addr;
-   isize = st->Ist.IMark.len;
-   CLG_ASSERT(origAddr == st->Ist.IMark.addr);  // XXX: check no overflow
+   origAddr = (Addr)st->Ist.IMark.addr + (Addr)st->Ist.IMark.delta;
+   CLG_ASSERT(origAddr == st->Ist.IMark.addr 
+                          + st->Ist.IMark.delta);  // XXX: check no overflow
 
    /* Get BB struct (creating if necessary).
     * JS: The hash table is keyed with orig_addr_noredir -- important!
@@ -976,8 +981,8 @@ IRSB* CLG_(instrument)( VgCallbackClosure* closure,
 	    break;
 
 	 case Ist_IMark: {
-            cia   = st->Ist.IMark.addr;
-            isize = st->Ist.IMark.len;
+            Addr64 cia   = st->Ist.IMark.addr + st->Ist.IMark.delta;
+            Int    isize = st->Ist.IMark.len;
             CLG_ASSERT(clgs.instr_offset == (Addr)cia - origAddr);
 	    // If Vex fails to decode an instruction, the size will be zero.
 	    // Pretend otherwise.
@@ -1028,8 +1033,8 @@ IRSB* CLG_(instrument)( VgCallbackClosure* closure,
 	       // instructions will be done inaccurately, but they're
 	       // very rare and this avoids errors from hitting more
 	       // than two cache lines in the simulation.
-	       if (dataSize > MIN_LINE_SIZE)
-		  dataSize = MIN_LINE_SIZE;
+	       if (CLG_(clo).simulate_cache && dataSize > CLG_(min_line_size))
+		  dataSize = CLG_(min_line_size);
 	       if (d->mFx == Ifx_Read || d->mFx == Ifx_Modify)
 		  addEvent_Dr( &clgs, curr_inode, dataSize, d->mAddr );
 	       if (d->mFx == Ifx_Write || d->mFx == Ifx_Modify)
@@ -1147,8 +1152,20 @@ IRSB* CLG_(instrument)( VgCallbackClosure* closure,
 
 	    CLG_ASSERT(clgs.ii_index>0);
 	    if (!clgs.seen_before) {
-		clgs.bb->jmp[cJumps].instr = clgs.ii_index-1;
-		clgs.bb->jmp[cJumps].skip = False;
+	      ClgJumpKind jk;
+
+	      if      (st->Ist.Exit.jk == Ijk_Call) jk = jk_Call;
+	      else if (st->Ist.Exit.jk == Ijk_Ret)  jk = jk_Return;
+	      else {
+		if (IRConst2Addr(st->Ist.Exit.dst) ==
+		    origAddr + curr_inode->instr_offset + curr_inode->instr_size)
+		  jk = jk_None;
+		else
+		  jk = jk_Jump;
+	      }
+
+	      clgs.bb->jmp[cJumps].instr = clgs.ii_index-1;
+	      clgs.bb->jmp[cJumps].jmpkind = jk;
 	    }
 
 	    /* Update global variable jmps_passed before the jump
@@ -1213,18 +1230,45 @@ IRSB* CLG_(instrument)( VgCallbackClosure* closure,
    CLG_ASSERT(clgs.bb->cjmp_count == cJumps);
    CLG_ASSERT(clgs.bb->instr_count = clgs.ii_index);
 
-   /* This stores the instr of the call/ret at BB end */
-   clgs.bb->jmp[cJumps].instr = clgs.ii_index-1;
+   /* Info for final exit from BB */
+   {
+     ClgJumpKind jk;
+
+     if      (sbIn->jumpkind == Ijk_Call) jk = jk_Call;
+     else if (sbIn->jumpkind == Ijk_Ret)  jk = jk_Return;
+     else {
+       jk = jk_Jump;
+       if ((sbIn->next->tag == Iex_Const) &&
+	   (IRConst2Addr(sbIn->next->Iex.Const.con) ==
+	    origAddr + clgs.instr_offset))
+	 jk = jk_None;
+     }
+     clgs.bb->jmp[cJumps].jmpkind = jk;
+     /* Instruction index of the call/ret at BB end
+      * (it is wrong for fall-through, but does not matter) */
+     clgs.bb->jmp[cJumps].instr = clgs.ii_index-1;
+   }
+
+   /* swap information of last exit with final exit if inverted */
+   if (clgs.bb->cjmp_inverted) {
+     ClgJumpKind jk;
+     UInt instr;
+
+     jk = clgs.bb->jmp[cJumps].jmpkind;
+     clgs.bb->jmp[cJumps].jmpkind = clgs.bb->jmp[cJumps-1].jmpkind;
+     clgs.bb->jmp[cJumps-1].jmpkind = jk;
+     instr = clgs.bb->jmp[cJumps].instr;
+     clgs.bb->jmp[cJumps].instr = clgs.bb->jmp[cJumps-1].instr;
+     clgs.bb->jmp[cJumps-1].instr = instr;
+   }
 
    if (clgs.seen_before) {
        CLG_ASSERT(clgs.bb->cost_count == update_cost_offsets(&clgs));
        CLG_ASSERT(clgs.bb->instr_len = clgs.instr_offset);
-       CLG_ASSERT(clgs.bb->jmpkind == sbIn->jumpkind);
    }
    else {
        clgs.bb->cost_count = update_cost_offsets(&clgs);
        clgs.bb->instr_len = clgs.instr_offset;
-       clgs.bb->jmpkind = sbIn->jumpkind;
    }
 
    CLG_DEBUG(3, "- instrument(BB %#lx): byteLen %u, CJumps %u, CostLen %u\n",
@@ -1329,8 +1373,8 @@ void zero_state_cost(thread_info* t)
     CLG_(zero_cost)( CLG_(sets).full, CLG_(current_state).cost );
 }
 
-/* Ups, this can go wrong... */
-extern void VG_(discard_translations) ( Addr64 start, ULong range );
+/* Ups, this can go very wrong... */
+extern void VG_(discard_translations) ( Addr64 start, ULong range, HChar* who );
 
 void CLG_(set_instrument_state)(Char* reason, Bool state)
 {
@@ -1343,7 +1387,7 @@ void CLG_(set_instrument_state)(Char* reason, Bool state)
   CLG_DEBUG(2, "%s: Switching instrumentation %s ...\n",
 	   reason, state ? "ON" : "OFF");
 
-  VG_(discard_translations)( (Addr64)0x1000, (ULong) ~0xfffl);
+  VG_(discard_translations)( (Addr64)0x1000, (ULong) ~0xfffl, "callgrind");
 
   /* reset internal state: call stacks, simulator */
   CLG_(forall_threads)(unwind_thread);
@@ -1354,12 +1398,178 @@ void CLG_(set_instrument_state)(Char* reason, Bool state)
     VG_(message)(Vg_DebugMsg, "%s: instrumentation switched %s\n",
 		 reason, state ? "ON" : "OFF");
 }
+
+/* helper for dump_state_togdb */
+static void dump_state_of_thread_togdb(thread_info* ti)
+{
+    static Char buf[512];
+    static FullCost sum = 0, tmp = 0;
+    Int t, p, i;
+    BBCC *from, *to;
+    call_entry* ce;
+
+    t = CLG_(current_tid);
+    CLG_(init_cost_lz)( CLG_(sets).full, &sum );
+    CLG_(copy_cost_lz)( CLG_(sets).full, &tmp, ti->lastdump_cost );
+    CLG_(add_diff_cost)( CLG_(sets).full, sum, ti->lastdump_cost,
+			 ti->states.entry[0]->cost);
+    CLG_(copy_cost)( CLG_(sets).full, ti->lastdump_cost, tmp );
+    CLG_(sprint_mappingcost)(buf, CLG_(dumpmap), sum);
+    VG_(gdb_printf)("events-%d: %s\n", t, buf);
+    VG_(gdb_printf)("frames-%d: %d\n", t, CLG_(current_call_stack).sp);
+
+    ce = 0;
+    for(i = 0; i < CLG_(current_call_stack).sp; i++) {
+      ce = CLG_(get_call_entry)(i);
+      /* if this frame is skipped, we don't have counters */
+      if (!ce->jcc) continue;
+      
+      from = ce->jcc->from;
+      VG_(gdb_printf)("function-%d-%d: %s\n",t, i, from->cxt->fn[0]->name);
+      VG_(gdb_printf)("calls-%d-%d: %llu\n",t, i, ce->jcc->call_counter);
+      
+      /* FIXME: EventSets! */
+      CLG_(copy_cost)( CLG_(sets).full, sum, ce->jcc->cost );
+      CLG_(copy_cost)( CLG_(sets).full, tmp, ce->enter_cost );
+      CLG_(add_diff_cost)( CLG_(sets).full, sum,
+			  ce->enter_cost, CLG_(current_state).cost );
+      CLG_(copy_cost)( CLG_(sets).full, ce->enter_cost, tmp );
+      
+      p = VG_(sprintf)(buf, "events-%d-%d: ",t, i);
+      CLG_(sprint_mappingcost)(buf + p, CLG_(dumpmap), sum );
+      VG_(gdb_printf)("%s\n", buf);
+    }
+    if (ce && ce->jcc) {
+      to = ce->jcc->to;
+      VG_(gdb_printf)("function-%d-%d: %s\n",t, i, to->cxt->fn[0]->name );
+    }
+}
+
+/* Dump current state */
+static void dump_state_togdb(void)
+{
+    static Char buf[512];
+    thread_info** th;
+    int t, p;
+    Int orig_tid = CLG_(current_tid);
+
+    VG_(gdb_printf)("instrumentation: %s\n",
+		    CLG_(instrument_state) ? "on":"off");
+    if (!CLG_(instrument_state)) return;
+
+    VG_(gdb_printf)("executed-bbs: %llu\n", CLG_(stat).bb_executions);
+    VG_(gdb_printf)("executed-calls: %llu\n", CLG_(stat).call_counter);
+    VG_(gdb_printf)("distinct-bbs: %d\n", CLG_(stat).distinct_bbs);
+    VG_(gdb_printf)("distinct-calls: %d\n", CLG_(stat).distinct_jccs);
+    VG_(gdb_printf)("distinct-functions: %d\n", CLG_(stat).distinct_fns);
+    VG_(gdb_printf)("distinct-contexts: %d\n", CLG_(stat).distinct_contexts);
+
+    /* "events:" line. Given here because it will be dynamic in the future */
+    p = VG_(sprintf)(buf, "events: ");
+    CLG_(sprint_eventmapping)(buf+p, CLG_(dumpmap));
+    VG_(gdb_printf)("%s\n", buf);
+    /* "part:" line (number of last part. Is 0 at start */
+    VG_(gdb_printf)("part: %d\n", CLG_(get_dump_counter)());
+		
+    /* threads */
+    th = CLG_(get_threads)();
+    p = VG_(sprintf)(buf, "threads:");
+    for(t=1;t<VG_N_THREADS;t++) {
+	if (!th[t]) continue;
+	p += VG_(sprintf)(buf+p, " %d", t);
+    }
+    VG_(gdb_printf)("%s\n", buf);
+    VG_(gdb_printf)("current-tid: %d\n", orig_tid);
+    CLG_(forall_threads)(dump_state_of_thread_togdb);
+}
+
   
+static void print_monitor_help ( void )
+{
+   VG_(gdb_printf) ("\n");
+   VG_(gdb_printf) ("callgrind monitor commands:\n");
+   VG_(gdb_printf) ("  dump [<dump_hint>]\n");
+   VG_(gdb_printf) ("        dump counters\n");
+   VG_(gdb_printf) ("  zero\n");
+   VG_(gdb_printf) ("        zero counters\n");
+   VG_(gdb_printf) ("  status\n");
+   VG_(gdb_printf) ("        print status\n");
+   VG_(gdb_printf) ("  instrumentation [on|off]\n");
+   VG_(gdb_printf) ("        get/set (if on/off given) instrumentation state\n");
+   VG_(gdb_printf) ("\n");
+}
+
+/* return True if request recognised, False otherwise */
+static Bool handle_gdb_monitor_command (ThreadId tid, Char *req)
+{
+   Char* wcmd;
+   Char s[VG_(strlen(req))]; /* copy for strtok_r */
+   Char *ssaveptr;
+
+   VG_(strcpy) (s, req);
+
+   wcmd = VG_(strtok_r) (s, " ", &ssaveptr);
+   switch (VG_(keyword_id) ("help dump zero status instrumentation", 
+                            wcmd, kwd_report_duplicated_matches)) {
+   case -2: /* multiple matches */
+      return True;
+   case -1: /* not found */
+      return False;
+   case  0: /* help */
+      print_monitor_help();
+      return True;
+   case  1: { /* dump */
+      CLG_(dump_profile)(req, False);
+      return True;
+   }
+   case  2: { /* zero */
+      CLG_(zero_all_cost)(False);
+      return True;
+   }
+
+   case 3: { /* status */
+     Char* arg = VG_(strtok_r) (0, " ", &ssaveptr);
+     if (arg && (VG_(strcmp)(arg, "internal") == 0)) {
+       /* internal interface to callgrind_control */
+       dump_state_togdb();
+       return True;
+     }
+
+     if (!CLG_(instrument_state)) {
+       VG_(gdb_printf)("No status available as instrumentation is switched off\n");
+     } else {
+       // Status information to be improved ...
+       thread_info** th = CLG_(get_threads)();
+       Int t, tcount = 0;
+       for(t=1;t<VG_N_THREADS;t++)
+	 if (th[t]) tcount++;
+       VG_(gdb_printf)("%d thread(s) running.\n", tcount);
+     }
+     return True;
+   }
+
+   case 4: { /* instrumentation */
+     Char* arg = VG_(strtok_r) (0, " ", &ssaveptr);
+     if (!arg) {
+       VG_(gdb_printf)("instrumentation: %s\n",
+		       CLG_(instrument_state) ? "on":"off");
+     }
+     else
+       CLG_(set_instrument_state)("Command", VG_(strcmp)(arg,"off")!=0);
+     return True;
+   }
+
+   default: 
+      tl_assert(0);
+      return False;
+   }
+}
 
 static
 Bool CLG_(handle_client_request)(ThreadId tid, UWord *args, UWord *ret)
 {
-   if (!VG_IS_TOOL_USERREQ('C','T',args[0]))
+   if (!VG_IS_TOOL_USERREQ('C','T',args[0])
+       && VG_USERREQ__GDB_MONITOR_COMMAND   != args[0])
       return False;
 
    switch(args[0]) {
@@ -1399,6 +1609,14 @@ Bool CLG_(handle_client_request)(ThreadId tid, UWord *args, UWord *ret)
      *ret = 0;                 /* meaningless */
      break;
 
+   case VG_USERREQ__GDB_MONITOR_COMMAND: {
+      Bool handled = handle_gdb_monitor_command (tid, (Char*)args[1]);
+      if (handled)
+         *ret = 1;
+      else
+         *ret = 0;
+      return handled;
+   }
    default:
       return False;
    }
@@ -1532,8 +1750,6 @@ void finish(void)
   CLG_(forall_threads)(unwind_thread);
 
   CLG_(dump_profile)(0, False);
-
-  CLG_(finish_command)();
 
   if (VG_(clo_verbosity) == 0) return;
   
@@ -1686,7 +1902,6 @@ void CLG_(post_clo_init)(void)
    }
 
    CLG_(init_dumps)();
-   CLG_(init_command)();
 
    (*CLG_(cachesim).post_clo_init)();
 
@@ -1716,7 +1931,7 @@ void CLG_(pre_clo_init)(void)
     VG_(details_name)            ("Callgrind");
     VG_(details_version)         (NULL);
     VG_(details_description)     ("a call-graph generating cache profiler");
-    VG_(details_copyright_author)("Copyright (C) 2002-2010, and GNU GPL'd, "
+    VG_(details_copyright_author)("Copyright (C) 2002-2012, and GNU GPL'd, "
 				  "by Josef Weidendorfer et al.");
     VG_(details_bug_reports_to)  (VG_BUGS_TO);
     VG_(details_avg_translation_sizeB) ( 500 );

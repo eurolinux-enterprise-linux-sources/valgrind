@@ -37,9 +37,10 @@
 <dt><span class="sect2"><a href="ms-manual.html#ms-manual.acting">9.2.9. Acting on Massif's Information</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="ms-manual.html#ms-manual.options">9.3. Massif Command-line Options</a></span></dt>
-<dt><span class="sect1"><a href="ms-manual.html#ms-manual.clientreqs">9.4. Massif Client Requests</a></span></dt>
-<dt><span class="sect1"><a href="ms-manual.html#ms-manual.ms_print-options">9.5. ms_print Command-line Options</a></span></dt>
-<dt><span class="sect1"><a href="ms-manual.html#ms-manual.fileformat">9.6. Massif's Output File Format</a></span></dt>
+<dt><span class="sect1"><a href="ms-manual.html#ms-manual.monitor-commands">9.4. Massif Monitor Commands</a></span></dt>
+<dt><span class="sect1"><a href="ms-manual.html#ms-manual.clientreqs">9.5. Massif Client Requests</a></span></dt>
+<dt><span class="sect1"><a href="ms-manual.html#ms-manual.ms_print-options">9.6. ms_print Command-line Options</a></span></dt>
+<dt><span class="sect1"><a href="ms-manual.html#ms-manual.fileformat">9.7. Massif's Output File Format</a></span></dt>
 </dl>
 </div>
 <p>To use this tool, you must specify
@@ -763,9 +764,26 @@ in a particular column, which makes following the allocation chains easier.
 </dl>
 </div>
 </div>
-<div class="sect1" title="9.4. Massif Client Requests">
+<div class="sect1" title="9.4. Massif Monitor Commands">
 <div class="titlepage"><div><div><h2 class="title" style="clear: both">
-<a name="ms-manual.clientreqs"></a>9.4. Massif Client Requests</h2></div></div></div>
+<a name="ms-manual.monitor-commands"></a>9.4. Massif Monitor Commands</h2></div></div></div>
+<p>The Massif tool provides monitor commands handled by the Valgrind
+gdbserver (see <a class="xref" href="manual-core-adv.html#manual-core-adv.gdbserver-commandhandling" title="3.2.5. Monitor command handling by the Valgrind gdbserver">Monitor command handling by the Valgrind gdbserver</a>).
+</p>
+<div class="itemizedlist"><ul class="itemizedlist" type="disc">
+<li class="listitem"><p><code class="varname">snapshot [&lt;filename&gt;]</code> requests
+    to take a snapshot and save it in the given &lt;filename&gt;
+    (default massif.vgdb.out).
+    </p></li>
+<li class="listitem"><p><code class="varname">detailed_snapshot [&lt;filename&gt;]</code>
+    requests to take a detailed snapshot and save it in the given
+    &lt;filename&gt; (default massif.vgdb.out).
+    </p></li>
+</ul></div>
+</div>
+<div class="sect1" title="9.5. Massif Client Requests">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="ms-manual.clientreqs"></a>9.5. Massif Client Requests</h2></div></div></div>
 <p>Massif does not have a <code class="filename">massif.h</code> file, but it does
 implement two of the core client requests:
 <code class="function">VALGRIND_MALLOCLIKE_BLOCK</code> and
@@ -773,9 +791,9 @@ implement two of the core client requests:
 <a class="xref" href="manual-core-adv.html#manual-core-adv.clientreq" title="3.1. The Client Request mechanism">The Client Request mechanism</a>.
 </p>
 </div>
-<div class="sect1" title="9.5. ms_print Command-line Options">
+<div class="sect1" title="9.6. ms_print Command-line Options">
 <div class="titlepage"><div><div><h2 class="title" style="clear: both">
-<a name="ms-manual.ms_print-options"></a>9.5. ms_print Command-line Options</h2></div></div></div>
+<a name="ms-manual.ms_print-options"></a>9.6. ms_print Command-line Options</h2></div></div></div>
 <p>ms_print's options are:</p>
 <div class="variablelist">
 <a name="ms_print.opts.list"></a><dl>
@@ -803,9 +821,9 @@ implement two of the core client requests:
 </dl>
 </div>
 </div>
-<div class="sect1" title="9.6. Massif's Output File Format">
+<div class="sect1" title="9.7. Massif's Output File Format">
 <div class="titlepage"><div><div><h2 class="title" style="clear: both">
-<a name="ms-manual.fileformat"></a>9.6. Massif's Output File Format</h2></div></div></div>
+<a name="ms-manual.fileformat"></a>9.7. Massif's Output File Format</h2></div></div></div>
 <p>Massif's file format is plain text (i.e. not binary) and deliberately
 easy to read for both humans and machines.  Nonetheless, the exact format
 is not described here.  This is because the format is currently very

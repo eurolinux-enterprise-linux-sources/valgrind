@@ -187,7 +187,7 @@
 <tr><td colspan="2"> </td></tr>
 <tr class="question">
 <td align="left" valign="top">
-<a name="faq.glibc_devel"></a><a name="id625580"></a><b>2.2.</b>
+<a name="faq.glibc_devel"></a><a name="id653429"></a><b>2.2.</b>
 </td>
 <td align="left" valign="top">
 <b>When building Valgrind, 'make' fails with this:</b><pre class="screen">
@@ -576,12 +576,12 @@ int main(void)
 <tr class="answer">
 <td align="left" valign="top"><a name="a-overruns"></a></td>
 <td align="left" valign="top">
-<p>Unfortunately, Memcheck doesn't do bounds checking on static
+<p>Unfortunately, Memcheck doesn't do bounds checking on global
     or stack arrays.  We'd like to, but it's just not possible to do in
     a reasonable way that fits with how Memcheck works.  Sorry.</p>
-<p>However, the experimental tool Ptrcheck can detect errors like
-    this.  Run Valgrind with the <code class="option">--tool=exp-ptrcheck</code> option
-    to try it, but beware that it is not as robust as Memcheck.</p>
+<p>However, the experimental tool SGcheck can detect errors like
+    this.  Run Valgrind with the <code class="option">--tool=exp-sgcheck</code> option
+    to try it, but be aware that it is not as robust as Memcheck.</p>
 </td>
 </tr>
 </table>
@@ -644,8 +644,9 @@ int main(void)
         should go away.
         </p></li>
 <li class="listitem"><p>"possibly lost" means your program is leaking
-        memory, unless you're doing funny things with pointers.
-        This is sometimes reasonable.  Use
+        memory, unless you're doing unusual things with pointers that could
+        cause them to point into the middle of an allocated block;  see the
+        user manual for some possible causes.  Use
         <code class="option">--show-possibly-lost=no</code> if you don't want to see
         these reports.</p></li>
 <li class="listitem"><p>"still reachable" means your program is probably ok -- it

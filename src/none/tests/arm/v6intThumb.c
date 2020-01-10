@@ -1,6 +1,6 @@
 
 /* How to compile:
-   gcc -O -g -Wall -mcpu=cortex-a8 -o testarmv6int testarmv6int.c
+   gcc -O -g -Wall -mcpu=cortex-a8 -o v6intThumb none/tests/arm/v6intThumb.c
 */
 
 #include <stdio.h>
@@ -1375,6 +1375,16 @@ int main ( void )
    TESTINST2("add.w  r1, r2, #0x0dd00000", 0x7fffffff, r1, r2, cv);
    TESTCARRYEND
 
+   printf("(T4) ADDW Rd, Rn, #uimm12\n");
+   TESTCARRY
+   TESTINST2("addw r1, r2, #0x000", 0x31415927, r1, r2, cv);
+   TESTINST2("addw r1, r2, #0x000", 0x91415927, r1, r2, cv);
+   TESTINST2("addw r1, r2, #0xABC", 0x31415927, r1, r2, cv);
+   TESTINST2("addw r1, r2, #0xABC", 0x91415927, r1, r2, cv);
+   TESTINST2("addw r1, r2, #0xFFF", 0x31415927, r1, r2, cv);
+   TESTINST2("addw r1, r2, #0xFFF", 0x91415927, r1, r2, cv);
+   TESTCARRYEND
+
    printf("(T3) CMP.W Rn, #constT [allegedly]\n");
    TESTCARRY
    TESTINST1x("cmp.w r1, #0xffffffff", 0x31415927, r1, cv);
@@ -1471,6 +1481,16 @@ int main ( void )
    TESTINST2("sub.w  r1, r2, #0x80000000", 0x7fffffff, r1, r2, cv);
    TESTINST2("sub.w  r1, r2, #0xff000000", 0x80000000, r1, r2, cv);
    TESTINST2("sub.w  r1, r2, #0x0dd00000", 0x7fffffff, r1, r2, cv);
+   TESTCARRYEND
+
+   printf("(T4) SUBW Rd, Rn, #uimm12\n");
+   TESTCARRY
+   TESTINST2("subw r1, r2, #0x000", 0x31415927, r1, r2, cv);
+   TESTINST2("subw r1, r2, #0x000", 0x91415927, r1, r2, cv);
+   TESTINST2("subw r1, r2, #0xABC", 0x31415927, r1, r2, cv);
+   TESTINST2("subw r1, r2, #0xABC", 0x91415927, r1, r2, cv);
+   TESTINST2("subw r1, r2, #0xFFF", 0x31415927, r1, r2, cv);
+   TESTINST2("subw r1, r2, #0xFFF", 0x91415927, r1, r2, cv);
    TESTCARRYEND
 
    printf("(T3) RSB{S}.W Rd, Rn, #constT [allegedly]\n");
@@ -5251,8 +5271,6 @@ int main ( void )
    TESTINST3("asr.w  r1, r2, r3", 0x91415927, 0x00000021, r1, r2, r3, cv);
    TESTCARRYEND
 
-#if 0
-   // not handled by vex
    printf("(T?) ROR{S}.W Rd, Rn, Rm\n");
    TESTCARRY
    TESTINST3("rors.w r1, r2, r3", 0x31415927, 0x00000000, r1, r2, r3, cv);
@@ -5272,7 +5290,6 @@ int main ( void )
    TESTINST3("ror.w  r1, r2, r3", 0x31415927, 0x00000020, r1, r2, r3, cv);
    TESTINST3("ror.w  r1, r2, r3", 0x31415927, 0x00000021, r1, r2, r3, cv);
    TESTCARRYEND
-#endif
 
    printf("MVN{S}.W Rd, Rn, shift,   and MOV{S}.W ditto\n");
    TESTCARRY
@@ -5851,6 +5868,31 @@ int main ( void )
 
    // plus whatever stuff we can throw in from the old ARM test program
    old_main();
+
+        printf("------------ SMMUL ------------\n");
+        TESTINST3("smmul   r0, r1, r2", 0, 0, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0xffffffff, 0, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0, 0xffffffff, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0xffffffff, 0xffffffff, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0x7fffffff, 0x7fffffff, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0x0000ffff, 0x0000ffff, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0xe444dc25, 0xd5eef620, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0x06ea9b2a, 0xa2108661, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0x448f3a5f, 0x17aecf57, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0x4b0c2337, 0xffa63d6c, r0, r1, r2, 0);
+        TESTINST3("smmul   r0, r1, r2", 0xf91d5f56, 0x088bc0f9, r0, r1, r2, 0);
+
+        TESTINST3("smmulr  r0, r1, r2", 0, 0, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0xffffffff, 0, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0, 0xffffffff, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0xffffffff, 0xffffffff, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0x7fffffff, 0x7fffffff, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0x0000ffff, 0x0000ffff, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0xe444dc25, 0xd5eef620, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0x06ea9b2a, 0xa2108661, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0x448f3a5f, 0x17aecf57, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0x4b0c2337, 0xffa63d6c, r0, r1, r2, 0);
+        TESTINST3("smmulr  r0, r1, r2", 0xf91d5f56, 0x088bc0f9, r0, r1, r2, 0);
 
    return 0;
 }

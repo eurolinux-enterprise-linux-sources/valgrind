@@ -1,8 +1,7 @@
-/* -*- mode: C; c-basic-offset: 3; -*- */
 /*
   This file is part of drd, a thread error detector.
 
-  Copyright (C) 2006-2010 Bart Van Assche <bvanassche@acm.org>.
+  Copyright (C) 2006-2012 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -56,7 +55,7 @@ static void drd_segment_push(struct semaphore_info* p, Segment* sg)
    tl_assert(sg);
    n = VG_(addToXA)(p->last_sem_post_seg, &sg);
 #if 0
-   VG_(message)(Vg_UserMsg, "0x%lx push: added at position %ld/%ld",
+   VG_(message)(Vg_DebugMsg, "0x%lx push: added at position %ld/%ld",
                 p->a1, n, VG_(sizeXA)(p->last_sem_post_seg));
 #endif
    tl_assert(*(Segment**)VG_(indexXA)(p->last_sem_post_seg, n) == sg);
@@ -70,7 +69,7 @@ static Segment* drd_segment_pop(struct semaphore_info* p)
 
    sz = VG_(sizeXA)(p->last_sem_post_seg);
 #if 0
-   VG_(message)(Vg_UserMsg, "0x%lx pop:  removed from position %ld/%ld",
+   VG_(message)(Vg_DebugMsg, "0x%lx pop:  removed from position %ld/%ld",
                 p->a1, sz - 1, sz);
 #endif
    sg = 0;
@@ -175,13 +174,9 @@ struct semaphore_info* DRD_(semaphore_init)(const Addr semaphore,
    Segment* sg;
 
    if (s_trace_semaphore)
-   {
-      VG_(message)(Vg_UserMsg,
-                   "[%d] sem_init      0x%lx value %u\n",
-                   DRD_(thread_get_running_tid)(),
-                   semaphore,
-                   value);
-   }
+      DRD_(trace_msg)("[%d] sem_init      0x%lx value %u",
+                      DRD_(thread_get_running_tid)(), semaphore, value);
+
    p = semaphore_get(semaphore);
    if (p)
    {
@@ -202,7 +197,7 @@ struct semaphore_info* DRD_(semaphore_init)(const Addr semaphore,
    {
 #if defined(VGO_darwin)
       const ThreadId vg_tid = VG_(get_running_tid)();
-      GenericErrInfo GEI = { DRD_(thread_get_running_tid)(), NULL };
+      GenericErrInfo GEI = { DRD_(thread_get_running_tid)(), 0 };
       VG_(maybe_record_error)(vg_tid,
 			      GenericErr,
 			      VG_(get_IP)(vg_tid),
@@ -227,13 +222,9 @@ void DRD_(semaphore_destroy)(const Addr semaphore)
    p = semaphore_get(semaphore);
 
    if (s_trace_semaphore)
-   {
-      VG_(message)(Vg_UserMsg,
-                   "[%d] sem_destroy   0x%lx value %u\n",
-                   DRD_(thread_get_running_tid)(),
-                   semaphore,
-                   p ? p->value : 0);
-   }
+      DRD_(trace_msg)("[%d] sem_destroy   0x%lx value %u",
+                      DRD_(thread_get_running_tid)(), semaphore,
+                      p ? p->value : 0);
 
    if (p == 0)
    {
@@ -261,13 +252,10 @@ struct semaphore_info* DRD_(semaphore_open)(const Addr semaphore,
    Segment* sg;
 
    if (s_trace_semaphore)
-   {
-      VG_(message)(Vg_UserMsg,
-                   "[%d] sem_open      0x%lx name %s"
-                   " oflag %#lx mode %#lo value %u\n",
-                   DRD_(thread_get_running_tid)(),
-                   semaphore, name, oflag, mode, value);
-   }
+      DRD_(trace_msg)("[%d] sem_open      0x%lx name %s"
+                      " oflag %#lx mode %#lo value %u",
+                      DRD_(thread_get_running_tid)(),
+                      semaphore, name, oflag, mode, value);
 
    /* Return if the sem_open() call failed. */
    if (! semaphore)
@@ -307,13 +295,9 @@ void DRD_(semaphore_close)(const Addr semaphore)
    p = semaphore_get(semaphore);
 
    if (s_trace_semaphore)
-   {
-      VG_(message)(Vg_UserMsg,
-                   "[%d] sem_close     0x%lx value %u\n",
-                   DRD_(thread_get_running_tid)(),
-                   semaphore,
-                   p ? p->value : 0);
-   }
+      DRD_(trace_msg)("[%d] sem_close     0x%lx value %u",
+                      DRD_(thread_get_running_tid)(), semaphore,
+                      p ? p->value : 0);
 
    if (p == 0)
    {
@@ -355,8 +339,7 @@ void DRD_(semaphore_pre_wait)(const Addr semaphore)
 
 /**
  * Called after sem_wait() finished.
- * @note Do not rely on the value of 'waited' -- some glibc versions do
- *       not set it correctly.
+ * @note Some C libraries do not set the 'waited' value correctly.
  */
 void DRD_(semaphore_post_wait)(const DrdThreadId tid, const Addr semaphore,
                                const Bool waited)
@@ -364,21 +347,17 @@ void DRD_(semaphore_post_wait)(const DrdThreadId tid, const Addr semaphore,
    struct semaphore_info* p;
    Segment* sg;
 
+   tl_assert(waited == 0 || waited == 1);
    p = semaphore_get(semaphore);
    if (s_trace_semaphore)
-   {
-      VG_(message)(Vg_UserMsg,
-                   "[%d] sem_wait      0x%lx value %u -> %u\n",
-                   DRD_(thread_get_running_tid)(),
-                   semaphore,
-                   p ? p->value : 0,
-                   p ? p->value - 1 : 0);
-   }
+      DRD_(trace_msg)("[%d] sem_wait      0x%lx value %u -> %u%s",
+                      DRD_(thread_get_running_tid)(), semaphore,
+                      p ? p->value : 0, p ? p->value - waited : 0,
+		      waited ? "" : " (did not wait)");
 
-   if (p)
-   {
+   if (p) {
       p->waiters--;
-      p->value--;
+      p->value -= waited;
    }
 
    /*
@@ -399,24 +378,24 @@ void DRD_(semaphore_post_wait)(const DrdThreadId tid, const Addr semaphore,
       return;
    }
 
+   if (!waited)
+      return;
+
    if (p->waits_to_skip > 0)
       p->waits_to_skip--;
    else
    {
       sg = drd_segment_pop(p);
       tl_assert(sg);
-      if (sg)
+      if (p->last_sem_post_tid != tid
+          && p->last_sem_post_tid != DRD_INVALID_THREADID)
       {
-         if (p->last_sem_post_tid != tid
-             && p->last_sem_post_tid != DRD_INVALID_THREADID)
-         {
-            DRD_(thread_new_segment_and_combine_vc)(tid, sg);
-         }
-         else
-            DRD_(thread_new_segment)(tid);
-         s_semaphore_segment_creation_count++;
-         DRD_(sg_put)(sg);
+         DRD_(thread_new_segment_and_combine_vc)(tid, sg);
       }
+      else
+         DRD_(thread_new_segment)(tid);
+      s_semaphore_segment_creation_count++;
+      DRD_(sg_put)(sg);
    }
 }
 
@@ -430,13 +409,9 @@ void DRD_(semaphore_pre_post)(const DrdThreadId tid, const Addr semaphore)
    p->value++;
 
    if (s_trace_semaphore)
-   {
-      VG_(message)(Vg_UserMsg,
-                   "[%d] sem_post      0x%lx value %u -> %u\n",
-                   DRD_(thread_get_running_tid)(),
-                   semaphore,
-                   p->value - 1, p->value);
-   }
+      DRD_(trace_msg)("[%d] sem_post      0x%lx value %u -> %u",
+                      DRD_(thread_get_running_tid)(),
+                      semaphore, p->value - 1, p->value);
 
    p->last_sem_post_tid = tid;
    sg = 0;

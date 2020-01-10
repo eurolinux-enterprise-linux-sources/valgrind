@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2005-2010 Apple Inc.
+   Copyright (C) 2005-2012 Apple Inc.
       Greg Parker  gparker@apple.com
 
    This program is free software; you can redistribute it and/or
@@ -30,8 +30,10 @@
 
 #if defined(VGP_amd64_darwin)
 
+#include "config.h"                // DARWIN_VERS
 #include "pub_core_basics.h"
 #include "pub_core_vki.h"
+#include "pub_core_libcsetjmp.h"   // to keep _threadstate.h happy
 #include "pub_core_threadstate.h"
 #include "pub_core_aspacemgr.h"
 #include "pub_core_xarray.h"
@@ -95,8 +97,23 @@ static void x86_float_state64_from_vex(x86_float_state64_t *mach,
                                        VexGuestAMD64State *vex)
 {
    // DDD: #warning GrP fixme fp state
-
-   VG_(memcpy)(&mach->__fpu_xmm0, &vex->guest_XMM0, 16 * sizeof(mach->__fpu_xmm0));
+   // JRS: what about the YMMHI bits?  Are they important?
+   VG_(memcpy)(&mach->__fpu_xmm0,  &vex->guest_YMM0,   sizeof(mach->__fpu_xmm0));
+   VG_(memcpy)(&mach->__fpu_xmm1,  &vex->guest_YMM1,   sizeof(mach->__fpu_xmm1));
+   VG_(memcpy)(&mach->__fpu_xmm2,  &vex->guest_YMM2,   sizeof(mach->__fpu_xmm2));
+   VG_(memcpy)(&mach->__fpu_xmm3,  &vex->guest_YMM3,   sizeof(mach->__fpu_xmm3));
+   VG_(memcpy)(&mach->__fpu_xmm4,  &vex->guest_YMM4,   sizeof(mach->__fpu_xmm4));
+   VG_(memcpy)(&mach->__fpu_xmm5,  &vex->guest_YMM5,   sizeof(mach->__fpu_xmm5));
+   VG_(memcpy)(&mach->__fpu_xmm6,  &vex->guest_YMM6,   sizeof(mach->__fpu_xmm6));
+   VG_(memcpy)(&mach->__fpu_xmm7,  &vex->guest_YMM7,   sizeof(mach->__fpu_xmm7));
+   VG_(memcpy)(&mach->__fpu_xmm8,  &vex->guest_YMM8,   sizeof(mach->__fpu_xmm8));
+   VG_(memcpy)(&mach->__fpu_xmm9,  &vex->guest_YMM9,   sizeof(mach->__fpu_xmm9));
+   VG_(memcpy)(&mach->__fpu_xmm10, &vex->guest_YMM10,  sizeof(mach->__fpu_xmm10));
+   VG_(memcpy)(&mach->__fpu_xmm11, &vex->guest_YMM11,  sizeof(mach->__fpu_xmm11));
+   VG_(memcpy)(&mach->__fpu_xmm12, &vex->guest_YMM12,  sizeof(mach->__fpu_xmm12));
+   VG_(memcpy)(&mach->__fpu_xmm13, &vex->guest_YMM13,  sizeof(mach->__fpu_xmm13));
+   VG_(memcpy)(&mach->__fpu_xmm14, &vex->guest_YMM14,  sizeof(mach->__fpu_xmm14));
+   VG_(memcpy)(&mach->__fpu_xmm15, &vex->guest_YMM15,  sizeof(mach->__fpu_xmm15));
 }
 
 
@@ -157,8 +174,23 @@ static void x86_float_state64_to_vex(const x86_float_state64_t *mach,
                                      VexGuestAMD64State *vex)
 {
    // DDD: #warning GrP fixme fp state
-
-   VG_(memcpy)(&vex->guest_XMM0, &mach->__fpu_xmm0, 16 * sizeof(mach->__fpu_xmm0));
+   // JRS: what about the YMMHI bits?  Are they important?
+   VG_(memcpy)(&vex->guest_YMM0,  &mach->__fpu_xmm0,  sizeof(mach->__fpu_xmm0));
+   VG_(memcpy)(&vex->guest_YMM1,  &mach->__fpu_xmm1,  sizeof(mach->__fpu_xmm1));
+   VG_(memcpy)(&vex->guest_YMM2,  &mach->__fpu_xmm2,  sizeof(mach->__fpu_xmm2));
+   VG_(memcpy)(&vex->guest_YMM3,  &mach->__fpu_xmm3,  sizeof(mach->__fpu_xmm3));
+   VG_(memcpy)(&vex->guest_YMM4,  &mach->__fpu_xmm4,  sizeof(mach->__fpu_xmm4));
+   VG_(memcpy)(&vex->guest_YMM5,  &mach->__fpu_xmm5,  sizeof(mach->__fpu_xmm5));
+   VG_(memcpy)(&vex->guest_YMM6,  &mach->__fpu_xmm6,  sizeof(mach->__fpu_xmm6));
+   VG_(memcpy)(&vex->guest_YMM7,  &mach->__fpu_xmm7,  sizeof(mach->__fpu_xmm7));
+   VG_(memcpy)(&vex->guest_YMM8,  &mach->__fpu_xmm8,  sizeof(mach->__fpu_xmm8));
+   VG_(memcpy)(&vex->guest_YMM9,  &mach->__fpu_xmm9,  sizeof(mach->__fpu_xmm9));
+   VG_(memcpy)(&vex->guest_YMM10, &mach->__fpu_xmm10, sizeof(mach->__fpu_xmm10));
+   VG_(memcpy)(&vex->guest_YMM11, &mach->__fpu_xmm11, sizeof(mach->__fpu_xmm11));
+   VG_(memcpy)(&vex->guest_YMM12, &mach->__fpu_xmm12, sizeof(mach->__fpu_xmm12));
+   VG_(memcpy)(&vex->guest_YMM13, &mach->__fpu_xmm13, sizeof(mach->__fpu_xmm13));
+   VG_(memcpy)(&vex->guest_YMM14, &mach->__fpu_xmm14, sizeof(mach->__fpu_xmm14));
+   VG_(memcpy)(&vex->guest_YMM15, &mach->__fpu_xmm15, sizeof(mach->__fpu_xmm15));
 }
 
 
@@ -281,7 +313,7 @@ asm(
                   // other values stay where they are in registers
 "   push $0\n"    // fake return address
 "   jmp _pthread_hijack\n"
-    );
+);
 
 
 
@@ -371,7 +403,7 @@ asm(
                       // other values stay where they are in registers
 "   push $0\n"        // fake return address
 "   jmp _wqthread_hijack\n"
-    );
+);
 
 
 /*  wqthread note: The kernel may create or destroy pthreads in the 
@@ -400,12 +432,26 @@ void wqthread_hijack(Addr self, Addr kport, Addr stackaddr, Addr workitem,
       lock. */
    VG_(acquire_BigLock_LL)("wqthread_hijack");
 
+   if (0) VG_(printf)("wqthread_hijack: self %#lx, kport %#lx, "
+                      "stackaddr %#lx, workitem %#lx, reuse %d, sp %#lx\n", 
+                      self, kport, stackaddr, workitem, reuse, sp);
+
    /* Start the thread with all signals blocked.  VG_(scheduler) will
       set the mask correctly when we finally get there. */
    VG_(sigfillset)(&blockall);
    VG_(sigprocmask)(VKI_SIG_SETMASK, &blockall, NULL);
 
    if (reuse) {
+
+     /* For whatever reason, tst->os_state.pthread appear to have a
+        constant offset of 96 on 10.7, but zero on 10.6 and 10.5.  No
+        idea why. */
+#      if DARWIN_VERS <= DARWIN_10_6
+       UWord magic_delta = 0;
+#      elif DARWIN_VERS >= DARWIN_10_7
+       UWord magic_delta = 0x60;
+#      endif
+
        // This thread already exists; we're merely re-entering 
        // after leaving via workq_ops(WQOPS_THREAD_RETURN). 
        // Don't allocate any V thread resources.
@@ -415,8 +461,14 @@ void wqthread_hijack(Addr self, Addr kport, Addr stackaddr, Addr workitem,
        vg_assert(mach_thread_self() == kport);
 
        tst = VG_(get_ThreadState)(tid);
+
+       if (0) VG_(printf)("wqthread_hijack reuse %s: tid %d, tst %p, "
+                          "tst->os_state.pthread %#lx\n",
+                          tst->os_state.pthread == self ? "SAME" : "DIFF",
+                          tid, tst, tst->os_state.pthread);
+
        vex = &tst->arch.vex;
-       vg_assert(tst->os_state.pthread == self);
+       vg_assert(tst->os_state.pthread - magic_delta == self);
    }
    else {
        // This is a new thread.

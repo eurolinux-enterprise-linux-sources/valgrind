@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2010 Julian Seward
+   Copyright (C) 2000-2012 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -54,6 +54,26 @@ extern Bool  VG_(clo_error_limit);
    default: 0 (no, return the application's exit code in the normal
    way. */
 extern Int   VG_(clo_error_exitcode);
+
+typedef 
+   enum { 
+      Vg_VgdbNo,   // Do not activate gdbserver.
+      Vg_VgdbYes,  // Activate gdbserver (default).
+      Vg_VgdbFull, // ACtivate gdbserver in full mode, allowing
+                   // a precise handling of watchpoints and single stepping
+                   // at any moment.
+   } 
+   VgVgdb;
+/* if != Vg_VgdbNo, allows valgrind to serve vgdb/gdb. */
+extern VgVgdb VG_(clo_vgdb);
+/* if > 0, checks every VG_(clo_vgdb_poll) BBS if vgdb wants to be served. */
+extern Int VG_(clo_vgdb_poll);
+/* prefix for the named pipes (FIFOs) used by vgdb/gdb to communicate with valgrind */
+extern HChar* VG_(clo_vgdb_prefix);
+/* if True, gdbserver in valgrind will expose a target description containing
+   shadow registers */
+extern Bool  VG_(clo_vgdb_shadow_registers);
+
 /* Enquire about whether to attach to a debugger at errors?   default: NO */
 extern Bool  VG_(clo_db_attach);
 /* The debugger command?  default: whatever gdb ./configure found */
@@ -66,10 +86,18 @@ extern Int   VG_(clo_sanity_level);
 /* Automatically attempt to demangle C++ names?  default: YES */
 extern Bool  VG_(clo_demangle);
 /* Simulate child processes? default: NO */
+/* Soname synonyms : a string containing a list of pairs
+   xxxxx=yyyyy separated by commas.
+   E.g. --soname-synonyms=somalloc=libtcmalloc*.so*,solibtruc=NONE */
+extern HChar* VG_(clo_soname_synonyms);
 extern Bool  VG_(clo_trace_children);
 /* String containing comma-separated patterns for executable names
    that should not be traced into even when --trace-children=yes */
 extern HChar* VG_(clo_trace_children_skip);
+/* The same as VG_(clo_trace_children), except that these patterns are
+   tested against the arguments for child processes, rather than the
+   executable name. */
+extern HChar* VG_(clo_trace_children_skip_by_arg);
 /* After a fork, the child's output can become confusingly
    intermingled with the parent's output.  This is especially
    problematic when VG_(clo_xml) is True.  Setting
@@ -102,8 +130,10 @@ extern Char* VG_(clo_fullpath_after)[VG_CLO_MAX_FULLPATH_AFTER];
 extern UChar VG_(clo_trace_flags);
 /* DEBUG: do bb profiling?  default: 00000000 ( == NO ) */
 extern UChar VG_(clo_profile_flags);
-/* DEBUG: if tracing codegen, be quiet until after this bb ( 0 ) */
+/* DEBUG: if tracing codegen, be quiet until after this bb */
 extern Int   VG_(clo_trace_notbelow);
+/* DEBUG: if tracing codegen, be quiet after this bb  */
+extern Int   VG_(clo_trace_notabove);
 /* DEBUG: print system calls?  default: NO */
 extern Bool  VG_(clo_trace_syscalls);
 /* DEBUG: print signal details?  default: NO */
@@ -122,10 +152,25 @@ extern Bool  VG_(clo_debug_dump_line);
 extern Bool  VG_(clo_debug_dump_frames);
 /* DEBUG: print redirection details?  default: NO */
 extern Bool  VG_(clo_trace_redir);
+/* Enable fair scheduling on multicore systems? default: NO */
+enum FairSchedType { disable_fair_sched, enable_fair_sched, try_fair_sched };
+extern enum FairSchedType VG_(clo_fair_sched);
 /* DEBUG: print thread scheduling events?  default: NO */
 extern Bool  VG_(clo_trace_sched);
 /* DEBUG: do heap profiling?  default: NO */
 extern Bool  VG_(clo_profile_heap);
+#define MAX_REDZONE_SZB 128
+// Maximum for the default values for core arenas and for client
+// arena given by the tool.
+// 128 is no special figure, just something not too big
+#define MAX_CLO_REDZONE_SZB 4096
+// We allow the user to increase the redzone size to 4Kb :
+// This allows "off by one" in an array of pages to be detected.
+#define CORE_REDZONE_DEFAULT_SZB 4
+extern Int VG_(clo_core_redzone_size);
+// VG_(clo_redzone_size) has default value -1, indicating to keep
+// the tool provided value.
+extern Int VG_(clo_redzone_size);
 /* DEBUG: display gory details for the k'th most popular error.
    default: Infinity. */
 extern Int   VG_(clo_dump_error);
@@ -203,7 +248,9 @@ typedef
       Vg_SmcNone,  // never generate self-checking translations
       Vg_SmcStack, // generate s-c-t's for code found in stacks
                    // (this is the default)
-      Vg_SmcAll    // make all translations self-checking.
+      Vg_SmcAll,   // make all translations self-checking.
+      Vg_SmcAllNonFile // make all translations derived from
+                   // non-file-backed memory self checking
    } 
    VgSmc;
 
@@ -220,9 +267,13 @@ extern HChar* VG_(clo_kernel_variant);
 extern Bool VG_(clo_dsymutil);
 
 /* Should we trace into this child executable (across execve etc) ?
-   This involves considering --trace-children=, --trace-children-skip=
-   and the name of the executable. */
-extern Bool VG_(should_we_trace_this_child) ( HChar* child_exe_name );
+   This involves considering --trace-children=,
+   --trace-children-skip=, --trace-children-skip-by-arg=, and the name
+   of the executable.  'child_argv' must not include the name of the
+   executable itself; iow child_argv[0] must be the first arg, if any,
+   for the child. */
+extern Bool VG_(should_we_trace_this_child) ( HChar* child_exe_name,
+                                              HChar** child_argv );
 
 #endif   // __PUB_CORE_OPTIONS_H
 

@@ -39,6 +39,7 @@
 <dt><span class="sect2"><a href="manual-core.html#manual-core.defopts">2.6.7. Setting Default Options</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.pthreads">2.7. Support for Threads</a></span></dt>
+<dd><dl><dt><span class="sect2"><a href="manual-core.html#manual-core.pthreads_perf_sched">2.7.1. Scheduling and Multi-Thread Performance</a></span></dt></dl></dd>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.signals">2.8. Handling of Signals</a></span></dt>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.install">2.9. Building and Installing Valgrind</a></span></dt>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.problems">2.10. If You Have Problems</a></span></dt>
@@ -503,8 +504,9 @@ in most cases.  We group the available options by rough categories.</p>
 <div class="sect2" title="2.6.1. Tool-selection Option">
 <div class="titlepage"><div><div><h3 class="title">
 <a name="manual-core.toolopts"></a>2.6.1. Tool-selection Option</h3></div></div></div>
-<p>The single most important option.</p>
-<div class="variablelist"><dl>
+<p><a name="tool.opts.para"></a>The single most important option.</p>
+<div class="variablelist">
+<a name="tool.opts.list"></a><dl>
 <dt>
 <a name="tool_name"></a><span class="term">
       <code class="option">--tool=&lt;toolname&gt; [default: memcheck] </code>
@@ -512,7 +514,8 @@ in most cases.  We group the available options by rough categories.</p>
 </dt>
 <dd><p>Run the Valgrind tool called <code class="varname">toolname</code>,
       e.g. Memcheck, Cachegrind, etc.</p></dd>
-</dl></div>
+</dl>
+</div>
 </div>
 <div class="sect2" title="2.6.2. Basic Options">
 <div class="titlepage"><div><div><h3 class="title">
@@ -575,7 +578,7 @@ in most cases.  We group the available options by rough categories.</p>
 </dd>
 <dt>
 <a name="opt.trace-children-skip"></a><span class="term">
-      <code class="option">--trace-children-skip=patt1,patt2 </code>
+      <code class="option">--trace-children-skip=patt1,patt2,... </code>
     </span>
 </dt>
 <dd>
@@ -599,6 +602,16 @@ in most cases.  We group the available options by rough categories.</p>
         executables.</p>
 </dd>
 <dt>
+<a name="opt.trace-children-skip-by-arg"></a><span class="term">
+      <code class="option">--trace-children-skip-by-arg=patt1,patt2,... </code>
+    </span>
+</dt>
+<dd><p>This is the same as  
+        <code class="option">--trace-children-skip</code>, with one difference:
+        the decision as to whether to trace into a child process is
+        made by examining the arguments to the child process, rather
+        than the name of its executable.</p></dd>
+<dt>
 <a name="opt.child-silent-after-fork"></a><span class="term">
       <code class="option">--child-silent-after-fork=&lt;yes|no&gt; [default: no] </code>
     </span>
@@ -612,6 +625,46 @@ in most cases.  We group the available options by rough categories.</p>
       strongly recommended if you are requesting XML output
       (<code class="varname">--xml=yes</code>), since otherwise the XML from child and
       parent may become mixed up, which usually makes it useless.
+      </p></dd>
+<dt>
+<a name="opt.vgdb"></a><span class="term">
+      <code class="option">--vgdb=&lt;no|yes|full&gt; [default: yes] </code>
+    </span>
+</dt>
+<dd>
+<p>Valgrind will provide "gdbserver" functionality when
+      <code class="option">--vgdb=yes</code> or <code class="option">--vgdb=full</code> is
+      specified.  This allows an external GNU GDB debugger to control
+      and debug your program when it runs on Valgrind.
+      <code class="option">--vgdb=full</code> incurs significant performance
+      overheads, but provides more precise breakpoints and
+      watchpoints. See <a class="xref" href="manual-core-adv.html#manual-core-adv.gdbserver" title="3.2. Debugging your program using Valgrind gdbserver and GDB">Debugging your program using Valgrind's gdbserver and GDB</a> for
+      a detailed description.
+      </p>
+<p> If the embedded gdbserver is enabled but no gdb is
+      currently being used, the <a class="xref" href="manual-core-adv.html#manual-core-adv.vgdb" title="3.2.9. vgdb command line options">vgdb</a>
+      command line utility can send "monitor commands" to Valgrind
+      from a shell.  The Valgrind core provides a set of
+      <a class="xref" href="manual-core-adv.html#manual-core-adv.valgrind-monitor-commands" title="3.2.10. Valgrind monitor commands">Valgrind monitor commands</a>. A tool
+      can optionally provide tool specific monitor commands, which are
+      documented in the tool specific chapter.
+      </p>
+</dd>
+<dt>
+<a name="opt.vgdb-error"></a><span class="term">
+      <code class="option">--vgdb-error=&lt;number&gt; [default: 999999999] </code>
+    </span>
+</dt>
+<dd><p> Use this option when the Valgrind gdbserver is enabled with
+      <code class="option">--vgdb=yes</code> or <code class="option">--vgdb=full</code>.
+      Tools that report errors will wait
+      for "<code class="computeroutput">number</code>" errors to be
+      reported before freezing the program and waiting for you to
+      connect with GDB.  It follows that a value of zero will cause
+      the gdbserver to be started before your program is executed.
+      This is typically used to insert GDB breakpoints before
+      execution, and also works with tools that do not report
+      errors, such as Massif.
       </p></dd>
 <dt>
 <a name="opt.track-fds"></a><span class="term">
@@ -721,8 +774,8 @@ that can report errors, e.g. Memcheck, but not Cachegrind.</p>
       </p>
 <p>This option is aimed at making life easier for tools that consume
       Valgrind's output as input, such as GUI front ends.  Currently this
-      option works with Memcheck, Helgrind and Ptrcheck.  The output format
-      is specified in the file
+      option works with Memcheck, Helgrind, DRD and SGcheck.  The output
+      format is specified in the file
       <code class="computeroutput">docs/internals/xml-output-protocol4.txt</code>
       in the source tree for Valgrind 3.5.0 or later.</p>
 <p>The recommended options for a GUI to pass, when requesting
@@ -807,7 +860,7 @@ that can report errors, e.g. Memcheck, but not Cachegrind.</p>
       using only the top four function locations (the place in the current
       function, and that of its three immediate callers).  So this doesn't
       affect the total number of errors reported.</p>
-<p>The maximum value for this is 50. Note that higher settings
+<p>The maximum value for this is 500. Note that higher settings
       will make Valgrind run a bit more slowly and take a bit more
       memory, but can be useful when working with programs with
       deeply-nested call chains.</p>
@@ -969,6 +1022,14 @@ that can report errors, e.g. Memcheck, but not Cachegrind.</p>
       the program at this point. When you have finished with the
       debugger, quit from it, and the program will continue. Trying to
       continue from inside the debugger doesn't work.</p>
+<p>
+      Note: if you use GDB, more powerful debugging support is
+      provided by the <code class="option">--vgdb=</code> <code class="varname">yes</code>
+      or <code class="varname">full</code> value.  This activates Valgrind's
+      internal gdbserver, which provides more-or-less full GDB-style
+      control of the application: insertion of breakpoints, continuing 
+      from inside GDB, inferior function calls, and much more.
+      </p>
 <p><code class="varname">C Ret</code> or <code class="varname">c Ret</code> causes
       Valgrind not to start a debugger, and not to ask again.</p>
 </dd>
@@ -1126,8 +1187,7 @@ that can report errors, e.g. Memcheck, but not Cachegrind.</p>
       significance on 32-bit machines.</p>
 <p>On Linux, you may request a stack of size up to 2GB.
       Valgrind will stop with a diagnostic message if the stack cannot
-      be allocated.  On AIX5 the allowed stack size is restricted to
-      128MB.</p>
+      be allocated.</p>
 <p><code class="option">--main-stacksize</code> only affects the stack
       size for the program's initial thread.  It has no bearing on the
       size of thread stacks, as Valgrind does not allocate
@@ -1154,8 +1214,8 @@ that can report errors, e.g. Memcheck, but not Cachegrind.</p>
 <div class="titlepage"><div><div><h3 class="title">
 <a name="manual-core.mallocopts"></a>2.6.4. malloc-related Options</h3></div></div></div>
 <p><a name="malloc-related.opts.para"></a>For tools that use their own version of
-<code class="computeroutput">malloc</code> (e.g. Memcheck and
-Massif), the following options apply.</p>
+<code class="computeroutput">malloc</code> (e.g. Memcheck,
+Massif, Helgrind, DRD), the following options apply.</p>
 <div class="variablelist">
 <a name="malloc-related.opts.list"></a><dl>
 <dt>
@@ -1170,6 +1230,26 @@ Massif), the following options apply.</p>
       specify a different alignment.  The supplied value must be greater
       than or equal to the default, less than or equal to 4096, and must be
       a power of two.</p></dd>
+<dt>
+<a name="opt.redzone-size"></a><span class="term">
+      <code class="option">--redzone-size=&lt;number&gt; [default: depends on the tool] </code>
+    </span>
+</dt>
+<dd>
+<p> Valgrind's <code class="function">malloc, realloc,</code> etc, add
+      padding blocks before and after each heap block allocated by the
+      program being run. Such padding blocks are called redzones.  The
+      default value for the redzone size depends on the tool.  For
+      example, Memcheck adds and protects a minimum of 16 bytes before
+      and after each block allocated by the client.  This allows it to
+      detect block underruns or overruns of up to 16 bytes.
+      </p>
+<p>Increasing the redzone size makes it possible to detect
+      overruns of larger distances, but increases the amount of memory
+      used by Valgrind.  Decreasing the redzone size will reduce the
+      memory needed by Valgrind but also reduces the chances of
+      detecting over/underruns, so is not recommended.</p>
+</dd>
 </dl>
 </div>
 </div>
@@ -1178,12 +1258,12 @@ Massif), the following options apply.</p>
 <a name="manual-core.rareopts"></a>2.6.5. Uncommon Options</h3></div></div></div>
 <p><a name="uncommon.opts.para"></a>These options apply to all tools, as they
 affect certain obscure workings of the Valgrind core.  Most people won't
-need to use these.</p>
+need to use them.</p>
 <div class="variablelist">
 <a name="uncommon.opts.list"></a><dl>
 <dt>
 <a name="opt.smc-check"></a><span class="term">
-      <code class="option">--smc-check=&lt;none|stack|all&gt; [default: stack] </code>
+      <code class="option">--smc-check=&lt;none|stack|all|all-non-file&gt; [default: stack] </code>
     </span>
 </dt>
 <dd>
@@ -1192,29 +1272,45 @@ need to use these.</p>
       overwrites it with new code, and executes the new code, Valgrind will
       continue to execute the translations it made for the old code.  This
       will likely lead to incorrect behaviour and/or crashes.</p>
-<p>Valgrind has three levels of self-modifying code detection:
+<p>Valgrind has four levels of self-modifying code detection:
       no detection, detect self-modifying code on the stack (which is used by
-      GCC to implement nested functions), or detect self-modifying code
-      everywhere.  Note that the default option will catch the vast majority
+      GCC to implement nested functions), detect self-modifying code
+      everywhere, and detect self-modifying code everywhere except in
+      file-backed mappings.
+
+      Note that the default option will catch the vast majority
       of cases.  The main case it will not catch is programs such as JIT
       compilers that dynamically generate code <span class="emphasis"><em>and</em></span>
       subsequently overwrite part or all of it.  Running with
-      <code class="varname">all</code> will slow Valgrind down noticeably.  Running with
+      <code class="varname">all</code> will slow Valgrind down noticeably.
+      Running with
       <code class="varname">none</code> will rarely speed things up, since very little
       code gets put on the stack for most programs.  The
-      <code class="function">VALGRIND_DISCARD_TRANSLATIONS</code> client request is
-      an alternative to <code class="option">--smc-check=all</code> that requires more
-      effort but is much faster.
+      <code class="function">VALGRIND_DISCARD_TRANSLATIONS</code> client
+      request is an alternative to <code class="option">--smc-check=all</code>
+      that requires more programmer effort but allows Valgrind to run
+      your program faster, by telling it precisely when translations
+      need to be re-made.
       
       </p>
-<p>Some architectures (including ppc32, ppc64 and ARM) require
-      programs which create code at runtime to flush the instruction
-      cache in between code generation and first use.  Valgrind
-      observes and honours such instructions.  Hence, on ppc32/Linux,
-      ppc64/Linux and ARM/Linux, Valgrind always provides complete, transparent
-      support for self-modifying code.  It is only on platforms such as
-      x86/Linux, AMD64/Linux and x86/Darwin that you need to use this
-      option.</p>
+<p><code class="option">--smc-check=all-non-file</code> provides a
+      cheaper but more limited version
+      of <code class="option">--smc-check=all</code>.  It adds checks to any
+      translations that do not originate from file-backed memory
+      mappings.  Typical applications that generate code, for example
+      JITs in web browsers, generate code into anonymous mmaped areas,
+      whereas the "fixed" code of the browser always lives in
+      file-backed mappings.  <code class="option">--smc-check=all-non-file</code>
+      takes advantage of this observation, limiting the overhead of
+      checking to code which is likely to be JIT generated.</p>
+<p>Some architectures (including ppc32, ppc64, ARM and MIPS)
+      require programs which create code at runtime to flush the
+      instruction cache in between code generation and first use.
+      Valgrind observes and honours such instructions.  Hence, on
+      ppc32/Linux, ppc64/Linux and ARM/Linux, Valgrind always provides
+      complete, transparent support for self-modifying code.  It is
+      only on platforms such as x86/Linux, AMD64/Linux, x86/Darwin and
+      AMD64/Darwin that you need to use this option.</p>
 </dd>
 <dt>
 <a name="opt.read-var-info"></a><span class="term">
@@ -1253,6 +1349,41 @@ need to use these.</p>
 ==15522==  Location 0x7fefffefc is 0 bytes inside local var "local"
 ==15522==  declared at varinfo1.c:46, in frame #1 of thread 1</pre>
 </dd>
+<dt>
+<a name="opt.vgdb-poll"></a><span class="term">
+      <code class="option">--vgdb-poll=&lt;number&gt; [default: 5000] </code>
+    </span>
+</dt>
+<dd><p> As part of its main loop, the Valgrind scheduler will
+      poll to check if some activity (such as an external command or
+      some input from a gdb) has to be handled by gdbserver.  This
+      activity poll will be done after having run the given number of
+      basic blocks (or slightly more than the given number of basic
+      blocks). This poll is quite cheap so the default value is set
+      relatively low. You might further decrease this value if vgdb
+      cannot use ptrace system call to interrupt Valgrind if all
+      threads are (most of the time) blocked in a system call.
+      </p></dd>
+<dt>
+<a name="opt.vgdb-shadow-registers"></a><span class="term">
+      <code class="option">--vgdb-shadow-registers=no|yes [default: no] </code>
+    </span>
+</dt>
+<dd><p> When activated, gdbserver will expose the Valgrind shadow registers
+      to GDB. With this, the value of the Valgrind shadow registers can be examined
+      or changed using GDB. Exposing shadow registers only works with GDB version
+      7.1 or later.
+      </p></dd>
+<dt>
+<a name="opt.vgdb-prefix"></a><span class="term">
+      <code class="option">--vgdb-prefix=&lt;prefix&gt; [default: /tmp/vgdb-pipe] </code>
+    </span>
+</dt>
+<dd><p> To communicate with gdb/vgdb, the Valgrind gdbserver
+      creates 3 files (2 named FIFOs and a mmap shared memory
+      file). The prefix option controls the directory and prefix for
+      the creation of these files.
+      </p></dd>
 <dt>
 <a name="opt.run-libc-freeres"></a><span class="term">
       <code class="option">--run-libc-freeres=&lt;yes|no&gt; [default: yes] </code>
@@ -1300,10 +1431,66 @@ need to use these.</p>
           when writing.  Without this, using some device drivers with a
           large number of strange ioctl commands becomes very
           tiresome.</p></li>
-<li class="listitem"><p><code class="option">enable-inner: </code> Enable some special
+<li class="listitem"><p><code class="option">enable-outer: </code> Enable some special
           magic needed when the program being run is itself
           Valgrind.</p></li>
+<li class="listitem"><p><code class="option">no-inner-prefix: </code> Disable printing
+          a prefix <code class="option">&gt;</code> in front of each stdout or
+          stderr output line in an inner Valgrind being run by an
+          outer Valgrind. This is useful when running Valgrind
+          regression tests in an outer/inner setup. Note that the
+          prefix <code class="option">&gt;</code> will always be printed in
+          front of the inner debug logging lines.</p></li>
+<li class="listitem"><p><code class="option">fuse-compatible: </code> Enable special
+            handling for certain system calls that may block in a FUSE
+            file-system.  This may be necessary when running Valgrind
+            on a multi-threaded program that uses one thread to manage
+            a FUSE file-system and another thread to access that
+            file-system.
+          </p></li>
 </ul></div>
+</dd>
+<dt>
+<a name="opt.fair-sched"></a><span class="term">
+      <code class="option">--fair-sched=&lt;no|yes|try&gt;    [default: no] </code>
+    </span>
+</dt>
+<dd>
+<p>The <code class="option">--fair-sched</code> option controls
+      the locking mechanism used by Valgrind to serialise thread
+      execution.  The locking mechanism controls the way the threads
+      are scheduled, and different settings give different trade-offs
+      between fairness and performance. For more details about the
+      Valgrind thread serialisation scheme and its impact on
+      performance and thread scheduling, see
+      <a class="xref" href="manual-core.html#manual-core.pthreads_perf_sched" title="2.7.1. Scheduling and Multi-Thread Performance">Scheduling and Multi-Thread Performance</a>.
+
+      </p>
+<div class="itemizedlist"><ul class="itemizedlist" type="disc">
+<li class="listitem">
+<p>The value <code class="option">--fair-sched=yes</code>
+          activates a fair scheduler.  In short, if multiple threads are
+          ready to run, the threads will be scheduled in a round robin
+          fashion.  This mechanism is not available on all platforms or
+          Linux versions.  If not available,
+          using <code class="option">--fair-sched=yes</code> will cause Valgrind to
+          terminate with an error.</p>
+<p>You may find this setting improves overall
+          responsiveness if you are running an interactive
+          multithreaded program, for example a web browser, on
+          Valgrind.</p>
+</li>
+<li class="listitem"><p>The value <code class="option">--fair-sched=try</code>
+          activates fair scheduling if available on the
+          platform.  Otherwise, it will automatically fall back
+          to <code class="option">--fair-sched=no</code>.</p></li>
+<li class="listitem"><p>The value <code class="option">--fair-sched=no</code> activates
+          a scheduler which does not guarantee fairness
+          between threads ready to run, but which in general gives the
+         highest performance.</p></li>
+</ul></div>
+<p>
+    </p>
 </dd>
 <dt>
 <a name="opt.kernel-variant"></a><span class="term">
@@ -1376,6 +1563,57 @@ need to use these.</p>
       and <code class="varname">?</code> wildcards.
       </p>
 </dd>
+<dt>
+<a name="opt.soname-synonyms"></a><span class="term">
+      <code class="option">--soname-synonyms=syn1=pattern1,syn2=pattern2,...</code>
+    </span>
+</dt>
+<dd>
+<p>When a shared library is loaded, Valgrind checks for 
+      functions in the library that must be replaced or wrapped.
+      For example, Memcheck replaces all malloc related
+      functions (malloc, free, calloc, ...) with its own versions.
+      Such replacements are done by default only in shared libraries whose
+      soname matches a predefined soname pattern (e.g.
+      <code class="varname">libc.so*</code> on linux).
+      By default, no replacement is done for a statically linked
+      library or for alternative libraries such as tcmalloc.
+      In some cases, the replacements allow
+      <code class="option">--soname-synonyms</code> to specify one additional
+      synonym pattern, giving flexibility in the replacement. </p>
+<p>Currently, this flexibility is only allowed for the
+      malloc related functions, using the
+      synonym <code class="varname">somalloc</code>.  This synonym is usable for
+      all tools doing standard replacement of malloc related functions
+      (e.g. memcheck, massif, drd, helgrind, exp-dhat, exp-sgcheck).
+      </p>
+<div class="itemizedlist"><ul class="itemizedlist" type="disc">
+<li class="listitem">
+<p>Alternate malloc library: to replace the malloc
+          related functions in an alternate library with
+          soname <code class="varname">mymalloclib.so</code>, give the
+          option <code class="option">--soname-synonyms=somalloc=mymalloclib.so</code>.
+          A pattern can be used to match multiple libraries sonames.
+          For
+          example, <code class="option">--soname-synonyms=somalloc=*tcmalloc*</code>
+          will match the soname of all variants of the tcmalloc library
+          (native, debug, profiled, ... tcmalloc variants). </p>
+<p>Note: the soname of a elf shared library can be
+          retrieved using the readelf utility. </p>
+</li>
+<li class="listitem"><p>Replacements in a statically linked library are done by
+          using the <code class="varname">NONE</code> pattern. For example, if
+          you link with <code class="varname">libtcmalloc.a</code>, memcheck 
+          will properly work when you give the
+          option <code class="option">--soname-synonyms=somalloc=NONE</code>.  Note
+          that a NONE pattern will match the main executable and any
+          shared library having no soname. </p></li>
+<li class="listitem"><p>To run a "default" Firefox build for Linux, in which
+          JEMalloc is linked in to the main executable,
+          use <code class="option">--soname-synonyms=somalloc=NONE</code>.
+          </p></li>
+</ul></div>
+</dd>
 </dl>
 </div>
 </div>
@@ -1386,6 +1624,11 @@ need to use these.</p>
 Valgrind itself.  You shouldn't need to use them in the normal run of
 things.  If you wish to see the list, use the
 <code class="option">--help-debug</code> option.</p>
+<p>If you wish to debug your program rather than debugging
+Valgrind itself, then you should use the options
+<code class="option">--vgdb=yes</code> or <code class="option">--vgdb=full</code>
+or <code class="option">--db-attach=yes</code>.
+</p>
 </div>
 <div class="sect2" title="2.6.7. Setting Default Options">
 <div class="titlepage"><div><div><h3 class="title">
@@ -1435,8 +1678,8 @@ that your program will use the native threading library, but Valgrind
 serialises execution so that only one (kernel) thread is running at a
 time.  This approach avoids the horrible implementation problems of
 implementing a truly multithreaded version of Valgrind, but it does
-mean that threaded apps run only on one CPU, even if you have a
-multiprocessor or multicore machine.</p>
+mean that threaded apps never use more than one CPU simultaneously,
+even if you have a multiprocessor or multicore machine.</p>
 <p>Valgrind doesn't schedule the threads itself.  It merely ensures
 that only one thread runs at once, using a simple locking scheme.  The
 actual thread scheduling remains under control of the OS kernel.  What
@@ -1455,6 +1698,85 @@ tools Helgrind and/or DRD to track them down.</p>
 everything is shared (a thread) or nothing is shared (fork-like); partial
 sharing will fail.
 </p>
+<div class="sect2" title="2.7.1. Scheduling and Multi-Thread Performance">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="manual-core.pthreads_perf_sched"></a>2.7.1. Scheduling and Multi-Thread Performance</h3></div></div></div>
+<p>A thread executes code only when it holds the abovementioned
+lock.  After executing some number of instructions, the running thread
+will release the lock.  All threads ready to run will then compete to
+acquire the lock.</p>
+<p>The <code class="option">--fair-sched</code> option controls the locking mechanism
+used to serialise thread execution.</p>
+<p>The default pipe based locking mechanism
+(<code class="option">--fair-sched=no</code>) is available on all
+platforms.  Pipe based locking does not guarantee fairness between
+threads: it is quite likely that a thread that has just released the
+lock reacquires it immediately, even though other threads are ready to
+run.  When using pipe based locking, different runs of the same
+multithreaded application might give very different thread
+scheduling.</p>
+<p>An alternative locking mechanism, based on futexes, is available
+on some platforms.  If available, it is activated
+by <code class="option">--fair-sched=yes</code> or
+<code class="option">--fair-sched=try</code>.  Futex based locking ensures
+fairness (round-robin scheduling) between threads: if multiple threads
+are ready to run, the lock will be given to the thread which first
+requested the lock.  Note that a thread which is blocked in a system
+call (e.g. in a blocking read system call) has not (yet) requested the
+lock: such a thread requests the lock only after the system call is
+finished.</p>
+<p> The fairness of the futex based locking produces better
+reproducibility of thread scheduling for different executions of a
+multithreaded application. This better reproducibility is particularly
+helpful when using Helgrind or DRD.</p>
+<p>Valgrind's use of thread serialisation implies that only one
+thread at a time may run.  On a multiprocessor/multicore system, the
+running thread is assigned to one of the CPUs by the OS kernel
+scheduler.  When a thread acquires the lock, sometimes the thread will
+be assigned to the same CPU as the thread that just released the
+lock.  Sometimes, the thread will be assigned to another CPU.  When
+using pipe based locking, the thread that just acquired the lock
+will usually be scheduled on the same CPU as the thread that just
+released the lock.  With the futex based mechanism, the thread that
+just acquired the lock will more often be scheduled on another
+CPU.</p>
+<p>Valgrind's thread serialisation and CPU assignment by the OS
+kernel scheduler can interact badly with the CPU frequency scaling
+available on many modern CPUs.  To decrease power consumption, the
+frequency of a CPU or core is automatically decreased if the CPU/core
+has not been used recently.  If the OS kernel often assigns the thread
+which just acquired the lock to another CPU/core, it is quite likely
+that this CPU/core is currently at a low frequency.  The frequency of
+this CPU will be increased after some time.  However, during this
+time, the (only) running thread will have run at the low frequency.
+Once this thread has run for some time, it will release the lock.
+Another thread will acquire this lock, and might be scheduled again on
+another CPU whose clock frequency was decreased in the
+meantime.</p>
+<p>The futex based locking causes threads to change CPUs/cores more
+often.  So, if CPU frequency scaling is activated, the futex based
+locking might decrease significantly the performance of a
+multithreaded app running under Valgrind.  Performance losses of up to
+50% degradation have been observed, as compared to running on a
+machine for which CPU frequency scaling has been disabled.  The pipe
+based locking locking scheme also interacts badly with CPU frequency
+scaling, with performance losses in the range 10..20% having been
+observed.</p>
+<p>To avoid such performance degradation, you should indicate to
+the kernel that all CPUs/cores should always run at maximum clock
+speed.  Depending on your Linux distribution, CPU frequency scaling
+may be controlled using a graphical interface or using command line
+such as
+<code class="computeroutput">cpufreq-selector</code> or
+<code class="computeroutput">cpufreq-set</code>.
+</p>
+<p>An alternative way to avoid these problems is to tell the
+OS scheduler to tie a Valgrind process to a specific (fixed) CPU using the
+<code class="computeroutput">taskset</code> command.  This should ensure
+that the selected CPU does not fall below its maximum frequency
+setting so long as any thread of the program has work to do.
+</p>
+</div>
 </div>
 <div class="sect1" title="2.8. Handling of Signals">
 <div class="titlepage"><div><div><h2 class="title" style="clear: both">
@@ -1464,7 +1786,8 @@ able to cope with any POSIX-compliant use of signals.</p>
 <p>If you're using signals in clever ways (for example, catching
 SIGSEGV, modifying page state and restarting the instruction), you're
 probably relying on precise exceptions.  In this case, you will need
-to use <code class="option">--vex-iropt-precise-memory-exns=yes</code>.
+to use <code class="option">--vex-iropt-register-updates=allregs-at-mem-access</code>
+or <code class="option">--vex-iropt-register-updates=allregs-at-each-insn</code>.
 </p>
 <p>If your program dies as a result of a fatal core-dumping signal,
 Valgrind will generate its own core file
@@ -1525,7 +1848,7 @@ for them, but instead the test checks the server version.  This
 is just plain wrong.</p>
 <p>If you are building a binary package of Valgrind for
 distribution, please read <code class="literal">README_PACKAGERS</code>
-<a class="xref" href="dist.readme-packagers.html" title="6. README_PACKAGERS">Readme Packagers</a>.  It contains some
+<a class="xref" href="dist.readme-packagers.html" title="7. README_PACKAGERS">Readme Packagers</a>.  It contains some
 important information.</p>
 <p>Apart from that, there's not much excitement here.  Let us
 know if you have build problems.</p>
@@ -1543,7 +1866,7 @@ plans to disable them.  If one of them breaks, please mail us!</p>
 <p>If you get an assertion failure
 in <code class="filename">m_mallocfree.c</code>, this may have happened because
 your program wrote off the end of a heap block, or before its
-beginning, thus corrupting head metadata.  Valgrind hopefully will have
+beginning, thus corrupting heap metadata.  Valgrind hopefully will have
 emitted a message to that effect before dying in this way.</p>
 <p>Read the <a class="xref" href="FAQ.html" title="Valgrind FAQ">Valgrind FAQ</a> for more advice about common problems, 
 crashes, etc.</p>
@@ -1560,11 +1883,10 @@ subject to the following constraints:</p>
    instructions.  If the translator encounters these, Valgrind will
    generate a SIGILL when the instruction is executed.  Apart from
    that, on x86 and amd64, essentially all instructions are supported,
-   up to and including SSE4.2 in 64-bit mode and SSSE3 in 32-bit mode.
-   Some exceptions: SSE4.2 AES instructions are not supported in
-   64-bit mode, and 32-bit mode does in fact support the bare minimum
-   SSE4 instructions to needed to run programs on MacOSX 10.6 on
-   32-bit targets.
+   up to and including AVX and AES in 64-bit mode and SSSE3 in 32-bit
+   mode.  32-bit mode does in fact support the bare minimum SSE4
+   instructions to needed to run programs on MacOSX 10.6 on 32-bit
+   targets.
    </p></li>
 <li class="listitem"><p>On ppc32 and ppc64, almost all integer, floating point and
    Altivec instructions are supported.  Specifically: integer and FP
@@ -1576,8 +1898,8 @@ subject to the following constraints:</p>
    are supported.</p></li>
 <li class="listitem"><p>On ARM, essentially the entire ARMv7-A instruction set
     is supported, in both ARM and Thumb mode.  ThumbEE and Jazelle are
-    not supported.  NEON and VFPv3 support is fairly complete.  ARMv6
-    media instruction support is mostly done but not yet complete.
+    not supported.  NEON, VFPv3 and ARMv6 media support is fairly
+    complete.
    </p></li>
 <li class="listitem"><p>If your program does its own memory management, rather than
    using malloc/new/free/delete, it should still work, but Memcheck's
@@ -1602,7 +1924,7 @@ subject to the following constraints:</p>
    large amount of administrative information maintained behind the
    scenes.  Another cause is that Valgrind dynamically translates the
    original executable.  Translated, instrumented code is 12-18 times
-   larger than the original so you can easily end up with 100+ MB of
+   larger than the original so you can easily end up with 150+ MB of
    translations when running (eg) a web browser.</p></li>
 <li class="listitem">
 <p>Valgrind can handle dynamically-generated code just fine.  If

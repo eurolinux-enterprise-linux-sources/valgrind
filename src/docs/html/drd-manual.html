@@ -38,13 +38,12 @@
 <dt><span class="sect2"><a href="drd-manual.html#drd-manual.api-checks">8.2.4. Detected Errors: Misuse of the POSIX threads API</a></span></dt>
 <dt><span class="sect2"><a href="drd-manual.html#drd-manual.clientreqs">8.2.5. Client Requests</a></span></dt>
 <dt><span class="sect2"><a href="drd-manual.html#drd-manual.gnome">8.2.6. Debugging GNOME Programs</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.qt">8.2.7. Debugging Qt Programs</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.boost.thread">8.2.8. Debugging Boost.Thread Programs</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.openmp">8.2.9. Debugging OpenMP Programs</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.cust-mem-alloc">8.2.10. DRD and Custom Memory Allocators</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.drd-versus-memcheck">8.2.11. DRD Versus Memcheck</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.resource-requirements">8.2.12. Resource Requirements</a></span></dt>
-<dt><span class="sect2"><a href="drd-manual.html#drd-manual.effective-use">8.2.13. Hints and Tips for Effective Use of DRD</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.boost.thread">8.2.7. Debugging Boost.Thread Programs</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.openmp">8.2.8. Debugging OpenMP Programs</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.cust-mem-alloc">8.2.9. DRD and Custom Memory Allocators</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.drd-versus-memcheck">8.2.10. DRD Versus Memcheck</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.resource-requirements">8.2.11. Resource Requirements</a></span></dt>
+<dt><span class="sect2"><a href="drd-manual.html#drd-manual.effective-use">8.2.12. Hints and Tips for Effective Use of DRD</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="drd-manual.html#drd-manual.Pthreads">8.3. Using the POSIX Threads API Effectively</a></span></dt>
 <dd><dl>
@@ -333,6 +332,16 @@ behavior of the DRD tool itself:</p>
         option enables the detection of lock contention.
       </p></dd>
 <dt><span class="term">
+      <code class="option">--join-list-vol=&lt;n&gt; [default: 10]</code>
+    </span></dt>
+<dd><p>
+        Data races that occur between a statement at the end of one thread
+	and another thread can be missed if memory access information is
+	discarded immediately after a thread has been joined. This option
+	allows to specify for how many joined threads memory access information
+	should be retained.
+      </p></dd>
+<dt><span class="term">
       <code class="option">
         --first-race-only=&lt;yes|no&gt; [default: no]
       </code>
@@ -347,11 +356,33 @@ behavior of the DRD tool itself:</p>
         --free-is-write=&lt;yes|no&gt; [default: no]
       </code>
     </span></dt>
-<dd><p>
-        Whether to report accessing freed memory as a race. Helps to detect
-        memory accesses that occur after memory has been freed but might cause
-        DRD to run slightly slower.
-      </p></dd>
+<dd>
+<p>
+        Whether to report races between accessing memory and freeing
+        memory. Enabling this option may cause DRD to run slightly
+        slower. Notes:
+	</p>
+<div class="itemizedlist"><ul class="itemizedlist" type="disc">
+<li class="listitem"><p>
+	      Don't enable this option when using custom memory allocators
+	      that use
+	      the <code class="computeroutput">VG_USERREQ__MALLOCLIKE_BLOCK</code>
+	      and <code class="computeroutput">VG_USERREQ__FREELIKE_BLOCK</code>
+	      because that would result in false positives.
+	    </p></li>
+<li class="listitem"><p>Don't enable this option when using reference-counted
+	      objects because that will result in false positives, even when
+	      that code has been annotated properly with
+	      <code class="computeroutput">ANNOTATE_HAPPENS_BEFORE</code>
+	      and <code class="computeroutput">ANNOTATE_HAPPENS_AFTER</code>. See
+	      e.g.  the output of the following command for an example:
+	      <code class="computeroutput">valgrind --tool=drd --free-is-write=yes
+		drd/tests/annotate_smart_pointer</code>.
+	    </p></li>
+</ul></div>
+<p>
+      </p>
+</dd>
 <dt><span class="term">
       <code class="option">
         --report-signal-unlocked=&lt;yes|no&gt; [default: yes]
@@ -439,6 +470,14 @@ client program:
         address. This option may be specified more than once.
       </p></dd>
 <dt><span class="term">
+      <code class="option">--ptrace-addr=&lt;address&gt; [default: none]</code>
+    </span></dt>
+<dd><p>
+        Trace all load and store activity for the specified address and keep
+        doing that even after the memory at that address has been freed and
+        reallocated.
+      </p></dd>
+<dt><span class="term">
       <code class="option">--trace-alloc=&lt;yes|no&gt; [default: no]</code>
     </span></dt>
 <dd><p>
@@ -462,6 +501,14 @@ client program:
     </span></dt>
 <dd><p>
         Trace all thread creation and all thread termination events.
+      </p></dd>
+<dt><span class="term">
+      <code class="option">--trace-hb=&lt;yes|no&gt; [default: no]</code>
+    </span></dt>
+<dd><p>
+        Trace execution of the <code class="literal">ANNOTATE_HAPPENS_BEFORE()</code>,
+	<code class="literal">ANNOTATE_HAPPENS_AFTER()</code> and
+	<code class="literal">ANNOTATE_HAPPENS_DONE()</code> client requests.
       </p></dd>
 <dt><span class="term">
       <code class="option">--trace-mutex=&lt;yes|no&gt; [default: no]</code>
@@ -800,6 +847,12 @@ available macros and client requests are:
       very helpful to trace all activity on the offending memory location.
     </p></li>
 <li class="listitem"><p>
+      The macro <code class="literal">DRD_STOP_TRACING_VAR(x)</code>. Stop tracing load
+      and store activity for the address range starting
+      at <code class="literal">&amp;x</code> and occupying <code class="literal">sizeof(x)</code>
+      bytes.
+    </p></li>
+<li class="listitem"><p>
       The macro <code class="literal">ANNOTATE_TRACE_MEMORY(&amp;x)</code>. Trace all
       load and store activity that touches at least the single byte at the
       address <code class="literal">&amp;x</code>.
@@ -990,32 +1043,9 @@ following to the shell environment variables:
 Reference Manual</a> for more information.
 </p>
 </div>
-<div class="sect2" title="8.2.7. Debugging Qt Programs">
+<div class="sect2" title="8.2.7. Debugging Boost.Thread Programs">
 <div class="titlepage"><div><div><h3 class="title">
-<a name="drd-manual.qt"></a>8.2.7. Debugging Qt Programs</h3></div></div></div>
-<p>
-The Qt library is the GUI library used by the KDE project.  Currently
-there are two versions of the Qt library in use: Qt3 by KDE 3 and Qt4
-by KDE 4. If possible, use Qt4 instead of Qt3. Qt3 is no longer
-supported, and there are known problems with multithreading support in
-Qt3. As an example, using QString objects in more than one thread will
-trigger race reports (this has been confirmed by Trolltech -- see also
-Trolltech task <a class="ulink" href="http://trolltech.com/developer/task-tracker/index_html" target="_top">#206152</a>).
-</p>
-<p>
-Qt4 applications are supported by DRD, but only if the
-<code class="literal">libqt4-debuginfo</code> package has been installed. Some
-of the synchronization and threading primitives in Qt4 bypass the
-POSIX threads library, and DRD can only intercept these if symbol
-information for the Qt4 library is available. DRD won't tell you if it
-has not been able to load the Qt4 debug information, but a huge number
-of data races will be reported on data protected via
-<code class="literal">QMutex</code> objects.
-</p>
-</div>
-<div class="sect2" title="8.2.8. Debugging Boost.Thread Programs">
-<div class="titlepage"><div><div><h3 class="title">
-<a name="drd-manual.boost.thread"></a>8.2.8. Debugging Boost.Thread Programs</h3></div></div></div>
+<a name="drd-manual.boost.thread"></a>8.2.7. Debugging Boost.Thread Programs</h3></div></div></div>
 <p>
 The Boost.Thread library is the threading library included with the
 cross-platform Boost Libraries. This threading library is an early
@@ -1041,9 +1071,9 @@ More information about Boost.Thread can be found here:
 <p>
 </p>
 </div>
-<div class="sect2" title="8.2.9. Debugging OpenMP Programs">
+<div class="sect2" title="8.2.8. Debugging OpenMP Programs">
 <div class="titlepage"><div><div><h3 class="title">
-<a name="drd-manual.openmp"></a>8.2.9. Debugging OpenMP Programs</h3></div></div></div>
+<a name="drd-manual.openmp"></a>8.2.8. Debugging OpenMP Programs</h3></div></div></div>
 <p>
 OpenMP stands for <span class="emphasis"><em>Open Multi-Processing</em></span>. The OpenMP
 standard consists of a set of compiler directives for C, C++ and Fortran
@@ -1129,9 +1159,9 @@ For more information about OpenMP, see also
 <a class="ulink" href="http://openmp.org/" target="_top">openmp.org</a>.
 </p>
 </div>
-<div class="sect2" title="8.2.10. DRD and Custom Memory Allocators">
+<div class="sect2" title="8.2.9. DRD and Custom Memory Allocators">
 <div class="titlepage"><div><div><h3 class="title">
-<a name="drd-manual.cust-mem-alloc"></a>8.2.10. DRD and Custom Memory Allocators</h3></div></div></div>
+<a name="drd-manual.cust-mem-alloc"></a>8.2.9. DRD and Custom Memory Allocators</h3></div></div></div>
 <p>
 DRD tracks all memory allocation events that happen via the
 standard memory allocation and deallocation functions
@@ -1175,9 +1205,9 @@ the <a class="ulink" href="http://gcc.gnu.org/onlinedocs/libstdc++/manual/bk01pt
 manual</a>.
 </p>
 </div>
-<div class="sect2" title="8.2.11. DRD Versus Memcheck">
+<div class="sect2" title="8.2.10. DRD Versus Memcheck">
 <div class="titlepage"><div><div><h3 class="title">
-<a name="drd-manual.drd-versus-memcheck"></a>8.2.11. DRD Versus Memcheck</h3></div></div></div>
+<a name="drd-manual.drd-versus-memcheck"></a>8.2.10. DRD Versus Memcheck</h3></div></div></div>
 <p>
 It is essential for correct operation of DRD that there are no memory
 errors such as dangling pointers in the client program. Which means that
@@ -1193,9 +1223,9 @@ alternatingly and to fix as many errors as possible after each run of
 each tool until none of the two tools prints any more error messages.
 </p>
 </div>
-<div class="sect2" title="8.2.12. Resource Requirements">
+<div class="sect2" title="8.2.11. Resource Requirements">
 <div class="titlepage"><div><div><h3 class="title">
-<a name="drd-manual.resource-requirements"></a>8.2.12. Resource Requirements</h3></div></div></div>
+<a name="drd-manual.resource-requirements"></a>8.2.11. Resource Requirements</h3></div></div></div>
 <p>
 The requirements of DRD with regard to heap and stack memory and the
 effect on the execution time of client programs are as follows:
@@ -1223,9 +1253,9 @@ effect on the execution time of client programs are as follows:
 <p>
 </p>
 </div>
-<div class="sect2" title="8.2.13. Hints and Tips for Effective Use of DRD">
+<div class="sect2" title="8.2.12. Hints and Tips for Effective Use of DRD">
 <div class="titlepage"><div><div><h3 class="title">
-<a name="drd-manual.effective-use"></a>8.2.13. Hints and Tips for Effective Use of DRD</h3></div></div></div>
+<a name="drd-manual.effective-use"></a>8.2.12. Hints and Tips for Effective Use of DRD</h3></div></div></div>
 <p>
 The following information may be helpful when using DRD:
 </p>
@@ -1403,10 +1433,6 @@ example.
       a know <code class="literal">libstdc++</code> issue -- see also GCC bug
       <a class="ulink" href="http://gcc.gnu.org/bugzilla/show_bug.cgi?id=40518" target="_top">40518</a>
       for more information.
-    </p></li>
-<li class="listitem"><p>
-      When address tracing is enabled, no information on atomic stores
-      will be displayed.
     </p></li>
 <li class="listitem"><p>
       If you compile the DRD source code yourself, you need GCC 3.0 or

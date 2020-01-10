@@ -1,8 +1,8 @@
 
 
 Valgrind FAQ
-Release 3.6.0 21 October 2010
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Release 3.8.0 10 August 2012
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Table of Contents
 1. Background
@@ -322,12 +322,12 @@ statically linking your program.
       return 0;
     }
     
-Unfortunately, Memcheck doesn't do bounds checking on static or stack 
+Unfortunately, Memcheck doesn't do bounds checking on global or stack 
 arrays. We'd like to, but it's just not possible to do in a reasonable 
 way that fits with how Memcheck works. Sorry. 
 
-However, the experimental tool Ptrcheck can detect errors like this. Run 
-Valgrind with the --tool=exp-ptrcheck option to try it, but beware that 
+However, the experimental tool SGcheck can detect errors like this. Run 
+Valgrind with the --tool=exp-sgcheck option to try it, but be aware that 
 it is not as robust as Memcheck. 
 
 
@@ -364,8 +364,10 @@ fix the "definitely lost" leaks, the "indirectly lost" leaks should go
 away. 
 
 * "possibly lost" means your program is leaking memory, unless you're 
-doing funny things with pointers. This is sometimes reasonable. Use 
---show-possibly-lost=no if you don't want to see these reports. 
+doing unusual things with pointers that could cause them to point into 
+the middle of an allocated block; see the user manual for some possible 
+causes. Use --show-possibly-lost=no if you don't want to see these 
+reports. 
 
 * "still reachable" means your program is probably ok -- it didn't free 
 some memory it could have. This is quite common and often reasonable. 

@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2005-2010 Julian Seward
+   Copyright (C) 2005-2012 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -337,6 +337,18 @@ struct vki_sigcontext {
 #define VKI_F_SETLK64		13
 #define VKI_F_SETLKW64		14
 
+#define VKI_F_SETOWN_EX		15
+#define VKI_F_GETOWN_EX		16
+
+#define VKI_F_OWNER_TID		0
+#define VKI_F_OWNER_PID		1
+#define VKI_F_OWNER_PGRP	2
+
+struct vki_f_owner_ex {
+	int	type;
+	__vki_kernel_pid_t	pid;
+};
+
 /* for F_[GET|SET]FL */
 #define VKI_FD_CLOEXEC	 1		/* actually anything with low bit set goes */
 
@@ -543,7 +555,7 @@ struct vki_termios {
 #define VKI_FIONBIO		_VKI_IOW('f', 126, int)
 #define VKI_FIONREAD		_VKI_IOR('f', 127, int)
 //#define VKI_TIOCINQ		VKI_FIONREAD
-//#define VKI_FIOQSIZE		_VKI_IOR('f', 128, vki_loff_t)
+#define VKI_FIOQSIZE		_VKI_IOR('f', 128, vki_loff_t)
 
 //#define VKI_TIOCGETP		_VKI_IOR('t', 8, struct vki_sgttyb)
 //#define VKI_TIOCSETP		_VKI_IOW('t', 9, struct vki_sgttyb)

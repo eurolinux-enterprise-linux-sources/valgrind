@@ -71,14 +71,15 @@ can be difficult to find by other means.</p>
 <p>Helgrind is aware of all the pthread abstractions and tracks
 their effects as accurately as it can.  On x86 and amd64 platforms, it
 understands and partially handles implicit locking arising from the
-use of the LOCK instruction prefix.
+use of the LOCK instruction prefix.  On PowerPC/POWER and ARM
+platforms, it partially handles implicit locking arising from 
+load-linked and store-conditional instruction pairs.
 </p>
 <p>Helgrind works best when your application uses only the POSIX
 pthreads API.  However, if you want to use custom threading 
 primitives, you can describe their behaviour to Helgrind using the
 <code class="varname">ANNOTATE_*</code> macros defined
-in <code class="varname">helgrind.h</code>.  This functionality was added in
-release 3.5.0 of Valgrind, and is considered experimental.</p>
+in <code class="varname">helgrind.h</code>.</p>
 <p>Following those is a section containing 
 <a class="link" href="hg-manual.html#hg-manual.effective-use" title="7.5. Hints and Tips for Effective Use of Helgrind">
 hints and tips on how to get the best out of Helgrind.</a>
@@ -199,36 +200,51 @@ locks have been acquired in the past.  When a thread acquires a new
 lock, the graph is updated, and then checked to see if it now contains
 a cycle.  The presence of a cycle indicates a potential deadlock involving
 the locks in the cycle.</p>
-<p>In simple situations, where the cycle only contains two locks,
-Helgrind will show where the required order was established:</p>
+<p>In general, Helgrind will choose two locks involved in the cycle
+and show you how their acquisition ordering has become inconsistent.
+It does this by showing the program points that first defined the
+ordering, and the program points which later violated it.  Here is a
+simple example involving just two locks:</p>
 <pre class="programlisting">
-Thread #1: lock order "0x7FEFFFAB0 before 0x7FEFFFA80" violated
-   at 0x4C23C91: pthread_mutex_lock (hg_intercepts.c:388)
-   by 0x40081F: main (tc13_laog1.c:24)
-  Required order was established by acquisition of lock at 0x7FEFFFAB0
-   at 0x4C23C91: pthread_mutex_lock (hg_intercepts.c:388)
-   by 0x400748: main (tc13_laog1.c:17)
-  followed by a later acquisition of lock at 0x7FEFFFA80
-   at 0x4C23C91: pthread_mutex_lock (hg_intercepts.c:388)
-   by 0x400773: main (tc13_laog1.c:18)
+Thread #1: lock order "0x7FF0006D0 before 0x7FF0006A0" violated
+
+Observed (incorrect) order is: acquisition of lock at 0x7FF0006A0
+   at 0x4C2BC62: pthread_mutex_lock (hg_intercepts.c:494)
+   by 0x400825: main (tc13_laog1.c:23)
+
+ followed by a later acquisition of lock at 0x7FF0006D0
+   at 0x4C2BC62: pthread_mutex_lock (hg_intercepts.c:494)
+   by 0x400853: main (tc13_laog1.c:24)
+
+Required order was established by acquisition of lock at 0x7FF0006D0
+   at 0x4C2BC62: pthread_mutex_lock (hg_intercepts.c:494)
+   by 0x40076D: main (tc13_laog1.c:17)
+
+ followed by a later acquisition of lock at 0x7FF0006A0
+   at 0x4C2BC62: pthread_mutex_lock (hg_intercepts.c:494)
+   by 0x40079B: main (tc13_laog1.c:18)
 </pre>
 <p>When there are more than two locks in the cycle, the error is
 equally serious.  However, at present Helgrind does not show the locks
-involved, so as to avoid flooding you with information.  That could be
-fixed in future.  For example, here is a an example involving a cycle
-of five locks from a naive implementation the famous Dining
-Philosophers problem
+involved, sometimes because it that information is not available, but
+also so as to avoid flooding you with information.  For example, here
+is an example involving a cycle of five locks from a naive
+implementation the famous Dining Philosophers problem
 (see <code class="computeroutput">helgrind/tests/tc14_laog_dinphils.c</code>).
 In this case Helgrind has detected that all 5 philosophers could
 simultaneously pick up their left fork and then deadlock whilst
 waiting to pick up their right forks.</p>
 <pre class="programlisting">
 Thread #6: lock order "0x6010C0 before 0x601160" violated
-   at 0x4C23C91: pthread_mutex_lock (hg_intercepts.c:388)
-   by 0x4007C0: dine (tc14_laog_dinphils.c:19)
-   by 0x4C25DF7: mythread_wrapper (hg_intercepts.c:178)
-   by 0x4E2F09D: start_thread (in /lib64/libpthread-2.5.so)
-   by 0x51054CC: clone (in /lib64/libc-2.5.so)
+
+Observed (incorrect) order is: acquisition of lock at 0x601160
+   (stack unavailable)
+
+ followed by a later acquisition of lock at 0x6010C0
+   at 0x4C2BC62: pthread_mutex_lock (hg_intercepts.c:494)
+   by 0x4007DE: dine (tc14_laog_dinphils.c:19)
+   by 0x4C2CBE7: mythread_wrapper (hg_intercepts.c:219)
+   by 0x4E369C9: start_thread (pthread_create.c:300)
 </pre>
 </div>
 <div class="sect1" title="7.4. Detected errors: Data Races">
@@ -241,7 +257,7 @@ locking can cause obscure timing dependent bugs.  Ensuring programs
 are race-free is one of the central difficulties of threaded
 programming.</p>
 <p>Reliably detecting races is a difficult problem, and most
-of Helgrind's internals are devoted to do dealing with it.  
+of Helgrind's internals are devoted to dealing with it.  
 We begin with a simple example.</p>
 <div class="sect2" title="7.4.1. A Simple Data Race">
 <div class="titlepage"><div><div><h3 class="title">
@@ -286,14 +302,18 @@ Thread #2 was created
    by 0x400605: main (simple_race.c:12)
 
 Possible data race during read of size 4 at 0x601038 by thread #1
+Locks held: none
    at 0x400606: main (simple_race.c:13)
- This conflicts with a previous write of size 4 by thread #2
+
+This conflicts with a previous write of size 4 by thread #2
+Locks held: none
    at 0x4005DC: child_fn (simple_race.c:6)
    by 0x4C29AFF: mythread_wrapper (hg_intercepts.c:194)
    by 0x4E3403F: start_thread (in /lib64/libpthread-2.8.so)
    by 0x511C0CC: clone (in /lib64/libc-2.8.so)
- Location 0x601038 is 0 bytes inside global var "var"
- declared at simple_race.c:3
+
+Location 0x601038 is 0 bytes inside global var "var"
+declared at simple_race.c:3
 </pre>
 <p>This is quite a lot of detail for an apparently simple error.
 The last clause is the main error message.  It says there is a race as
@@ -319,7 +339,10 @@ program.</p>
    threads.</p>
 <p>By examining your program at the two locations, you should be
    able to get at least some idea of what the root cause of the
-   problem is.</p>
+   problem is.  For each location, Helgrind shows the set of locks
+   held at the time of the access.  This often makes it clear which
+   thread, if any, failed to take a required lock.  In this example
+   neither thread holds a lock during the access.</p>
 </li>
 <li class="listitem">
 <p>For races which occur on global or stack variables, Helgrind
@@ -530,17 +553,21 @@ Thread #3 was created
    by 0x4008F2: main (tc21_pthonce.c:86)
 
 Possible data race during read of size 4 at 0x601070 by thread #3
+Locks held: none
    at 0x40087A: child (tc21_pthonce.c:74)
    by 0x4C29AFF: mythread_wrapper (hg_intercepts.c:194)
    by 0x4E3403F: start_thread (in /lib64/libpthread-2.8.so)
    by 0x511C0CC: clone (in /lib64/libc-2.8.so)
- This conflicts with a previous write of size 4 by thread #2
+
+This conflicts with a previous write of size 4 by thread #2
+Locks held: none
    at 0x400883: child (tc21_pthonce.c:74)
    by 0x4C29AFF: mythread_wrapper (hg_intercepts.c:194)
    by 0x4E3403F: start_thread (in /lib64/libpthread-2.8.so)
    by 0x511C0CC: clone (in /lib64/libc-2.8.so)
- Location 0x601070 is 0 bytes inside local var "unprotected2"
- declared at tc21_pthonce.c:51, in frame #0 of thread 3
+
+Location 0x601070 is 0 bytes inside local var "unprotected2"
+declared at tc21_pthonce.c:51, in frame #0 of thread 3
 </pre>
 <p>Helgrind first announces the creation points of any threads
 referenced in the error message.  This is so it can speak concisely
@@ -556,7 +583,9 @@ the point it was detected.</p>
 "<code class="computeroutput">This conflicts with a previous
 write</code>".  This shows a previous access which also
 accessed the stated address, and which is believed to be racing
-against the access in the first call stack.</p>
+against the access in the first call stack. Note that this second
+call stack is limited to a maximum of 8 entries to limit the
+memory usage.</p>
 <p>Finally, Helgrind may attempt to give a description of the
 raced-on address in source level terms.  In this example, it
 identifies it as a local variable, shows its name, declaration point,
@@ -578,8 +607,9 @@ thread-safe:</p>
 <li class="listitem"><p>Perhaps the location was intended to be protected by
   a mutex?  If so, you need to lock and unlock the mutex at both
   access points, even if one of the accesses is reported to be a read.
-  Did you perhaps forget the locking at one or other of the
-  accesses?</p></li>
+  Did you perhaps forget the locking at one or other of the accesses?
+  To help you do this, Helgrind shows the set of locks held by each
+  threads at the time they accessed the raced-on location.</p></li>
 <li class="listitem">
 <p>Alternatively, perhaps you intended to use a some
   other scheme to make it safe, such as signalling on a condition
@@ -671,6 +701,67 @@ of false data-race errors.</p>
       failures with more recent versions.</p>
 </li>
 </ul></div>
+<p>If you must implement your own threading primitives, there
+      are a set of client request macros
+      in <code class="computeroutput">helgrind.h</code> to help you
+      describe your primitives to Helgrind.  You should be able to
+      mark up mutexes, condition variables, etc, without difficulty.
+    </p>
+<p>
+      It is also possible to mark up the effects of thread-safe
+      reference counting using the
+      <code class="computeroutput">ANNOTATE_HAPPENS_BEFORE</code>,
+      <code class="computeroutput">ANNOTATE_HAPPENS_AFTER</code> and
+      <code class="computeroutput">ANNOTATE_HAPPENS_BEFORE_FORGET_ALL</code>,
+      macros.  Thread-safe reference counting using an atomically
+      incremented/decremented refcount variable causes Helgrind
+      problems because a one-to-zero transition of the reference count
+      means the accessing thread has exclusive ownership of the
+      associated resource (normally, a C++ object) and can therefore
+      access it (normally, to run its destructor) without locking.
+      Helgrind doesn't understand this, and markup is essential to
+      avoid false positives.
+    </p>
+<p>
+      Here are recommended guidelines for marking up thread safe
+      reference counting in C++.  You only need to mark up your
+      release methods -- the ones which decrement the reference count.
+      Given a class like this:
+    </p>
+<pre class="programlisting">
+class MyClass {
+   unsigned int mRefCount;
+
+   void Release ( void ) {
+      unsigned int newCount = atomic_decrement(&amp;mRefCount);
+      if (newCount == 0) {
+         delete this;
+      }
+   }
+}
+</pre>
+<p>
+     the release method should be marked up as follows:
+   </p>
+<pre class="programlisting">
+   void Release ( void ) {
+      unsigned int newCount = atomic_decrement(&amp;mRefCount);
+      if (newCount == 0) {
+         ANNOTATE_HAPPENS_AFTER(&amp;mRefCount);
+         ANNOTATE_HAPPENS_BEFORE_FORGET_ALL(&amp;mRefCount);
+         delete this;
+      } else {
+         ANNOTATE_HAPPENS_BEFORE(&amp;mRefCount);
+      }
+   }
+</pre>
+<p>
+      There are a number of complex, mostly-theoretical objections to
+      this scheme.  From a theoretical standpoint it appears to be
+      impossible to devise a markup scheme which is completely correct
+      in the sense of guaranteeing to remove all false races.  The
+      proposed scheme however works well in practice.
+    </p>
 </li>
 <li class="listitem">
 <p>Avoid memory recycling.  If you can't avoid it, you must use
@@ -831,6 +922,26 @@ unlock(mx)                             unlock(mx)
 <div class="variablelist">
 <a name="hg.opts.list"></a><dl>
 <dt>
+<a name="opt.free-is-write"></a><span class="term">
+      <code class="option">--free-is-write=no|yes
+      [default: no] </code>
+    </span>
+</dt>
+<dd>
+<p>When enabled (not the default), Helgrind treats freeing of
+        heap memory as if the memory was written immediately before
+        the free.  This exposes races where memory is referenced by
+        one thread, and freed by another, but there is no observable
+        synchronisation event to ensure that the reference happens
+        before the free.
+      </p>
+<p>This functionality is new in Valgrind 3.7.0, and is
+        regarded as experimental.  It is not enabled by default
+        because its interaction with custom memory allocators is not
+        well understood at present.  User feedback is welcomed.
+      </p>
+</dd>
+<dt>
 <a name="opt.track-lockorders"></a><span class="term">
       <code class="option">--track-lockorders=no|yes
       [default: yes] </code>
@@ -852,7 +963,9 @@ unlock(mx)                             unlock(mx)
         Helgrind collects enough information about "old" accesses that
         it can produce two stack traces in a race report -- both the
         stack trace for the current access, and the trace for the
-        older, conflicting access.</p>
+        older, conflicting access. To limit memory usage, "old" accesses
+        stack traces are limited to a maximum of 8 entries, even if
+        <code class="option">--num-callers</code> value is bigger.</p>
 <p>Collecting such information is expensive in both speed and
         memory, particularly for programs that do many inter-thread
         synchronisation events (locks, unlocks, etc).  Without such
@@ -903,6 +1016,19 @@ unlock(mx)                             unlock(mx)
         bytes, so the maximum value will easily eat up three extra
         gigabytes or so of memory.</p>
 </dd>
+<dt>
+<a name="opt.check-stack-refs"></a><span class="term">
+      <code class="option">--check-stack-refs=no|yes
+      [default: yes] </code>
+    </span>
+</dt>
+<dd><p>
+        By default Helgrind checks all data memory accesses made by your
+        program.  This flag enables you to skip checking for accesses
+        to thread stacks (local variables).  This can improve
+        performance, but comes at the cost of missing races on
+        stack-allocated data.
+      </p></dd>
 </dl>
 </div>
 </div>

@@ -45,9 +45,10 @@
 <dt><span class="sect2"><a href="cl-manual.html#cl-manual.options.simulation">6.3.5. Simulation options</a></span></dt>
 <dt><span class="sect2"><a href="cl-manual.html#cl-manual.options.cachesimulation">6.3.6. Cache simulation options</a></span></dt>
 </dl></dd>
-<dt><span class="sect1"><a href="cl-manual.html#cl-manual.clientrequests">6.4. Callgrind specific client requests</a></span></dt>
-<dt><span class="sect1"><a href="cl-manual.html#cl-manual.callgrind_annotate-options">6.5. callgrind_annotate Command-line Options</a></span></dt>
-<dt><span class="sect1"><a href="cl-manual.html#cl-manual.callgrind_control-options">6.6. callgrind_control Command-line Options</a></span></dt>
+<dt><span class="sect1"><a href="cl-manual.html#cl-manual.monitor-commands">6.4. Callgrind Monitor Commands</a></span></dt>
+<dt><span class="sect1"><a href="cl-manual.html#cl-manual.clientrequests">6.5. Callgrind specific client requests</a></span></dt>
+<dt><span class="sect1"><a href="cl-manual.html#cl-manual.callgrind_annotate-options">6.6. callgrind_annotate Command-line Options</a></span></dt>
+<dt><span class="sect1"><a href="cl-manual.html#cl-manual.callgrind_control-options">6.7. callgrind_control Command-line Options</a></span></dt>
 </dl>
 </div>
 <p>To use this tool, you must specify
@@ -119,11 +120,11 @@ Read the documentation for <a class="xref" href="cg-manual.html" title="5. Cache
 below describes the features supported in addition to Cachegrind's
 features.</p>
 <p>Callgrind's ability to detect function calls and returns depends
-on the instruction set of the platform it is run on.  It works best
-on x86 and amd64, and unfortunately currently does not work so well
-on PowerPC code.  This is because there are no explicit call or return
-instructions in the PowerPC instruction set, so Callgrind has to rely
-on heuristics to detect calls and returns.</p>
+on the instruction set of the platform it is run on.  It works best on
+x86 and amd64, and unfortunately currently does not work so well on
+PowerPC, ARM, Thumb or MIPS code.  This is because there are no explicit
+call or return instructions in these instruction sets, so Callgrind
+has to rely on heuristics to detect calls and returns.</p>
 </div>
 <div class="sect2" title="6.1.2. Basic Usage">
 <div class="titlepage"><div><div><h3 class="title">
@@ -295,7 +296,7 @@ callgrind.out.<span class="emphasis"><em>pid</em></span>.<span class="emphasis">
       at the position in your code where you want a profile dump to happen. Use 
       <code class="computeroutput"><a class="xref" href="cl-manual.html#cr.zero-stats">CALLGRIND_ZERO_STATS</a>;</code> to only 
       zero profile counters.
-      See <a class="xref" href="cl-manual.html#cl-manual.clientrequests" title="6.4. Callgrind specific client requests">Client request reference</a> for more information on
+      See <a class="xref" href="cl-manual.html#cl-manual.clientrequests" title="6.5. Callgrind specific client requests">Client request reference</a> for more information on
       Callgrind specific client requests.</p></li>
 </ul></div>
 <p>If you are running a multi-threaded application and specify the
@@ -910,9 +911,27 @@ Also see <a class="xref" href="cl-manual.html#cl-manual.cycles" title="6.2.4. Av
 </div>
 </div>
 </div>
-<div class="sect1" title="6.4. Callgrind specific client requests">
+<div class="sect1" title="6.4. Callgrind Monitor Commands">
 <div class="titlepage"><div><div><h2 class="title" style="clear: both">
-<a name="cl-manual.clientrequests"></a>6.4. Callgrind specific client requests</h2></div></div></div>
+<a name="cl-manual.monitor-commands"></a>6.4. Callgrind Monitor Commands</h2></div></div></div>
+<p>The Callgrind tool provides monitor commands handled by the Valgrind
+gdbserver (see <a class="xref" href="manual-core-adv.html#manual-core-adv.gdbserver-commandhandling" title="3.2.5. Monitor command handling by the Valgrind gdbserver">Monitor command handling by the Valgrind gdbserver</a>).
+</p>
+<div class="itemizedlist"><ul class="itemizedlist" type="disc">
+<li class="listitem"><p><code class="varname">dump [&lt;dump_hint&gt;]</code> requests to dump the
+    profile data. </p></li>
+<li class="listitem"><p><code class="varname">zero</code> requests to zero the profile data
+    counters. </p></li>
+<li class="listitem"><p><code class="varname">instrumentation [on|off]</code> requests to set 
+    (if parameter on/off is given) or get the current instrumentation state.
+    </p></li>
+<li class="listitem"><p><code class="varname">status</code> requests to print out some status
+    information.</p></li>
+</ul></div>
+</div>
+<div class="sect1" title="6.5. Callgrind specific client requests">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="cl-manual.clientrequests"></a>6.5. Callgrind specific client requests</h2></div></div></div>
 <p>Callgrind provides the following specific client requests in
 <code class="filename">callgrind.h</code>.  See that file for the exact details of
 their arguments.</p>
@@ -975,9 +994,9 @@ their arguments.</p>
 </dl>
 </div>
 </div>
-<div class="sect1" title="6.5. callgrind_annotate Command-line Options">
+<div class="sect1" title="6.6. callgrind_annotate Command-line Options">
 <div class="titlepage"><div><div><h2 class="title" style="clear: both">
-<a name="cl-manual.callgrind_annotate-options"></a>6.5. callgrind_annotate Command-line Options</h2></div></div></div>
+<a name="cl-manual.callgrind_annotate-options"></a>6.6. callgrind_annotate Command-line Options</h2></div></div></div>
 <div class="variablelist">
 <a name="callgrind_annotate.opts.list"></a><dl>
 <dt><span class="term"><code class="option">-h --help</code></span></dt>
@@ -1024,9 +1043,9 @@ their arguments.</p>
 </dl>
 </div>
 </div>
-<div class="sect1" title="6.6. callgrind_control Command-line Options">
+<div class="sect1" title="6.7. callgrind_control Command-line Options">
 <div class="titlepage"><div><div><h2 class="title" style="clear: both">
-<a name="cl-manual.callgrind_control-options"></a>6.6. callgrind_control Command-line Options</h2></div></div></div>
+<a name="cl-manual.callgrind_control-options"></a>6.7. callgrind_control Command-line Options</h2></div></div></div>
 <p>By default, callgrind_control acts on all programs run by the
   current user under Callgrind.  It is possible to limit the actions to
   specified Callgrind runs by providing a list of pids or program names as

@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2010 Julian Seward
+   Copyright (C) 2000-2012 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -64,22 +64,11 @@
 #  define VG_CLREQ_SZB             20
 #  define VG_STACK_REDZONE_SZB      0
 
-#elif defined(VGP_ppc32_aix5)
-#  define VG_MIN_INSTR_SZB          4
-#  define VG_MAX_INSTR_SZB          4 
-#  define VG_CLREQ_SZB             20
-   /* The PowerOpen ABI actually says 220 bytes, but that is not an
-      8-aligned number, and frequently forces Memcheck's
-      mc_{new,die}_mem_stack_N routines into slow cases by losing
-      8-alignment of the area to be messed with.  So let's just say
-      224 instead.  Gdb has a similar kludge. */
-#  define VG_STACK_REDZONE_SZB    224
-
-#elif defined(VGP_ppc64_aix5)
-#  define VG_MIN_INSTR_SZB          4
-#  define VG_MAX_INSTR_SZB          4 
-#  define VG_CLREQ_SZB             20
-#  define VG_STACK_REDZONE_SZB    288 // is this right?
+#elif defined(VGP_s390x_linux)
+#  define VG_MIN_INSTR_SZB          2
+#  define VG_MAX_INSTR_SZB          6
+#  define VG_CLREQ_SZB             10
+#  define VG_STACK_REDZONE_SZB      0  // s390 has no redzone
 
 #elif defined(VGP_x86_darwin)
 #  define VG_MIN_INSTR_SZB          1  // min length of native instruction
@@ -93,6 +82,12 @@
 #  define VG_MAX_INSTR_SZB         16
 #  define VG_CLREQ_SZB             19
 #  define VG_STACK_REDZONE_SZB    128
+
+#elif defined(VGP_mips32_linux)
+#  define VG_MIN_INSTR_SZB          4
+#  define VG_MAX_INSTR_SZB          4 
+#  define VG_CLREQ_SZB             20
+#  define VG_STACK_REDZONE_SZB      0
 
 #else
 #  error Unknown platform
@@ -132,7 +127,8 @@ void VG_(set_syscall_return_shadows) ( ThreadId tid,
 // current threads.
 // This is very Memcheck-specific -- it's used to find the roots when
 // doing leak checking.
-extern void VG_(apply_to_GP_regs)(void (*f)(UWord val));
+extern void VG_(apply_to_GP_regs)(void (*f)(ThreadId tid,
+                                            HChar* regname, UWord val));
 
 // This iterator lets you inspect each live thread's stack bounds.
 // Returns False at the end.  'tid' is the iterator and you can only
@@ -161,6 +157,12 @@ extern SizeT VG_(thread_get_altstack_size) ( ThreadId tid );
 // most platforms it's the identity function.  Unfortunately, on
 // ppc64-linux it isn't (sigh).
 extern void* VG_(fnptr_to_fnentry)( void* );
+
+/* Returns the size of the largest guest register that we will
+   simulate in this run.  This depends on both the guest architecture
+   and on the specific capabilities we are simulating for that guest
+   (eg, AVX or non-AVX ?, for amd64). */
+extern Int VG_(machine_get_size_of_largest_guest_register) ( void );
 
 #endif   // __PUB_TOOL_MACHINE_H
 

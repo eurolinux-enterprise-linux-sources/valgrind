@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2010 OpenWorks LLP
+   Copyright (C) 2004-2012 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -87,9 +87,11 @@ extern ULong h_generic_calc_CmpNEZ32x2 ( ULong );
 extern ULong h_generic_calc_CmpNEZ16x4 ( ULong );
 extern ULong h_generic_calc_CmpNEZ8x8  ( ULong );
 
-extern ULong h_generic_calc_QNarrow32Sx2 ( ULong, ULong );
-extern ULong h_generic_calc_QNarrow16Sx4 ( ULong, ULong );
-extern ULong h_generic_calc_QNarrow16Ux4 ( ULong, ULong );
+extern ULong h_generic_calc_QNarrowBin32Sto16Sx4 ( ULong, ULong );
+extern ULong h_generic_calc_QNarrowBin16Sto8Sx8  ( ULong, ULong );
+extern ULong h_generic_calc_QNarrowBin16Sto8Ux8  ( ULong, ULong );
+extern ULong h_generic_calc_NarrowBin32to16x4    ( ULong, ULong );
+extern ULong h_generic_calc_NarrowBin16to8x8     ( ULong, ULong );
 
 extern ULong h_generic_calc_InterleaveHI8x8 ( ULong, ULong );
 extern ULong h_generic_calc_InterleaveLO8x8 ( ULong, ULong );
@@ -151,8 +153,17 @@ extern UInt h_generic_calc_QSub8Sx4 ( UInt, UInt );
 
 extern UInt h_generic_calc_Sad8Ux4  ( UInt, UInt );
 
+extern UInt h_generic_calc_QAdd32S  ( UInt, UInt );
+extern UInt h_generic_calc_QSub32S  ( UInt, UInt );
+
 extern UInt h_generic_calc_CmpNEZ16x2 ( UInt );
 extern UInt h_generic_calc_CmpNEZ8x4  ( UInt );
+
+extern ULong h_DPBtoBCD ( ULong dpb );
+extern ULong h_BCDtoDPB ( ULong bcd );
+
+ULong dpb_to_bcd(ULong chunk);  // helper for h_DPBtoBCD
+ULong bcd_to_dpb(ULong chunk);  // helper for h_BCDtoDPB
 
 #endif /* ndef __VEX_HOST_GENERIC_SIMD64_H */
 
