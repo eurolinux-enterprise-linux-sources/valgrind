@@ -1,0 +1,327 @@
+commit 6ff58430ec182294a60d39d026024645c96d8dd1
+Author: philippe <philippe@a5019735-40e9-0310-863c-91ae7b9d1cf9>
+Date:   Sun Jul 21 16:04:05 2013 +0000
+
+    fix 321960 pthread_create() then alloca() causing invalid stack write errors
+    
+    Problem created by a discrepancy between the initial main stack
+    anon segment, and the main stack registered in m_stacks.c
+    
+    Looking at some tracing; we see that there are two pages of stack:
+    --9078:2:main       tell tool about 0ffefff000-0fff000fff rw-
+    The stack between the base and the current sp is marked as not accessible:
+    --9078:2:main       mark stack inaccessible 0ffefff000-0fff0004bf
+    
+    This is matching the aspacemgr view:
+    --9078:1:aspacem   22: RSVN 0ffe801000-0ffeffefff 8380416 ----- SmUpper
+    --9078:1:aspacem   23: anon 0ffefff000-0fff000fff    8192 rw---
+    (all the above is normal/as expected)
+    
+    
+    However, the main stack is registered in m_stacks.c as having only one page:
+    --9078:2:stacks     register 0xFFF000000-0xFFF000FFF as stack 0
+    
+    When the main stack is grown, m_stacks.c is informed by m_signals.c
+    that the stack is grown. This is done by trapping the signal 11
+    when a not mapped page is accessed.
+    However, the 2nd page does not cause a signal (as it is mapped).
+    So, m_stacks.c still believes the main has one page stack.
+    This then gives problems in the tracking of the SP and current_stack
+    in m_stacks.c.
+    
+    Only one page was registered for the main stack, as the registration
+    was done with values computed before possibly adding a page
+    needed for the ABI redzone.
+    
+    The fix is to properly register the main stack with the size of
+    the stack segment, once all aspects have been taken into account.
+    With the fix, the stack is registered as:
+    --31501:2:stacks     register 0xFFEFFF000-0xFFF000FFF as stack 0
+    
+      Another possible fix would be to always register the main stack with the
+      full size of the aspacemgr stack segment (i.e. the anon+RSVN above)
+      (idea is that this is similar to non main threads, for which the
+      full thread stack is registered from the beginning, even if not fully
+      used yet).
+      The first fix was preferred, assuming it is better to keep registering
+      the main stack "physical" size (and not its maximal size).
+    
+    
+    Test memcheck/tests/thread_alloca added, based on reproducer
+    done by Daniel Stodden.
+    The bug might be triggered or not depending on the initial value
+    of the SP, which is influenced by the size of the "env".
+    So, the test execs itself, growing each time the environment.
+    This has given a reasonable chance/way to reproduce the bug on Ubuntu 12
+    and on a Debian 6.
+    (tested on amd64/Ubuntu 12 and Debian 6
+               x86/fedora12
+               ppc64/fedora18
+    
+    Note that while investigating this bug, another strange thing was seen:
+    thread stacks are registered in m_stacks.c but are never unregistered.
+    It is not very clear that it is needed or not to unregister them:
+    thread stack segments are not freed when a thread terminates :
+    when a thread slot is re-used, its thread stack will also be re-used.
+    (Is that good for address space mgt ? A process that has created many
+    temporary threads will have the thread stacks lost forever ???).
+    
+    
+    
+    
+    
+    git-svn-id: svn://svn.valgrind.org/valgrind/trunk@13467 a5019735-40e9-0310-863c-91ae7b9d1cf9
+
+diff --git a/coregrind/m_initimg/initimg-linux.c b/coregrind/m_initimg/initimg-linux.c
+index 653ce1a..0d493ec 100644
+--- a/coregrind/m_initimg/initimg-linux.c
++++ b/coregrind/m_initimg/initimg-linux.c
+@@ -491,10 +491,6 @@ Addr setup_client_stack( void*  init_sp,
+    /* The max stack size */
+    clstack_max_size = VG_PGROUNDUP(clstack_max_size);
+ 
+-   /* Record stack extent -- needed for stack-change code. */
+-   VG_(clstk_base) = clstack_start;
+-   VG_(clstk_end)  = clstack_end;
+-
+    if (0)
+       VG_(printf)("stringsize=%d auxsize=%d stacksize=%d maxsize=0x%x\n"
+                   "clstack_start %p\n"
+@@ -572,6 +568,11 @@ Addr setup_client_stack( void*  init_sp,
+ 
+      vg_assert(ok);
+      vg_assert(!sr_isError(res)); 
++
++     /* Record stack extent -- needed for stack-change code. */
++     VG_(clstk_base) = anon_start -inner_HACK;
++     VG_(clstk_end)  = VG_(clstk_base) + anon_size +inner_HACK -1;
++
+    }
+ 
+    /* ==================== create client stack ==================== */
+
+
+diff --git a/memcheck/tests/thread_alloca.c b/memcheck/tests/thread_alloca.c
+new file mode 100644
+index 0000000..fa0c185
+--- /dev/null
++++ b/memcheck/tests/thread_alloca.c
+@@ -0,0 +1,73 @@
++/* Reproduces bug 321960 (based on test from Daniel Stodden).
++   At least on Ubuntu 12 and 13, causes invalid write errors
++   in __yell or the memset call (due to some part of the main
++   stack being marked as not addressable in memcheck).
++   Bug seems extremely sensitive to initial conditions:
++   Depending on the size of the env, bug is triggered or not.
++   Also, a high nr of threads in thr[] is needed to get
++   the problem. */
++#include <pthread.h>
++#include <alloca.h>
++#include <assert.h>
++#include <string.h>
++#include <stdio.h>
++#include <unistd.h>
++#include <stdlib.h> 
++
++void *
++nop(void *nil)
++{
++    return NULL;
++}
++
++void
++__yell(void)
++{
++    char buf[256];
++    memset(buf, 0, sizeof(buf));
++}
++
++/* Without argument, executes once.
++   Otherwise first arg indicates nr of times the process will exec
++   itself, each time increasing the size of the environment
++   by about 50 characters. */
++int main(int argc, char **argv, char** envp)
++{
++    pthread_t thr[50];
++    int i, err;
++
++    for (i = 0; i < sizeof(thr) / sizeof(*thr); i++) {
++        err = pthread_create(&thr[i], NULL, nop, NULL);
++        assert(!err);
++    }
++
++    alloca(4096);
++    __yell();
++
++    for (i = 0; i < sizeof(thr) / sizeof(*thr); i++)
++        pthread_join(thr[i], NULL);
++
++    if ( argc == 2 && atoi(argv[1]) > 0) {
++       /* exec ourselves with some more env */
++       char** new_env;
++       char more_env[100];
++       char n[10];
++       int j;
++
++       sprintf(more_env, "N%d=ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",  atoi(argv[1]));
++       for (j = 0; envp[j]; j++)
++          ;
++       new_env = malloc((j+2) * sizeof(char*));
++       assert (new_env != NULL);
++       for (i = 0; i < j; i++)
++          new_env[i] = envp[i];
++       new_env[i++] = more_env;
++       new_env[i++] = NULL;
++       assert(i == j+2);
++       sprintf (n, "%d",  atoi(argv[1]) - 1);
++       // system ("env | wc");
++       execle(argv[0], argv[0], n, NULL, new_env);
++       assert(0);
++    } else
++       return 0;
++}
+diff --git a/memcheck/tests/thread_alloca.stderr.exp b/memcheck/tests/thread_alloca.stderr.exp
+new file mode 100644
+index 0000000..e69de29
+diff --git a/memcheck/tests/thread_alloca.vgtest b/memcheck/tests/thread_alloca.vgtest
+new file mode 100644
+index 0000000..6e7e38b
+--- /dev/null
++++ b/memcheck/tests/thread_alloca.vgtest
+@@ -0,0 +1,2 @@
++prog: thread_alloca 30
++vgopts: -q --trace-children=yes
+--- valgrind-3.8.1/memcheck/tests/Makefile.am.orig	2016-09-15 17:36:36.913143361 +0200
++++ valgrind-3.8.1/memcheck/tests/Makefile.am	2016-09-15 17:37:58.334013327 +0200
+@@ -203,6 +203,7 @@
+ 	test-plo-yes.vgtest test-plo-yes.stdout.exp \
+ 	    test-plo-yes.stderr.exp-le64 test-plo-yes.stderr.exp-le32 \
+ 	    test-plo-no.stderr.exp-s390x-mvc \
++	thread_alloca.stderr.exp thread_alloca.vgtest \
+ 	trivialleak.stderr.exp trivialleak.vgtest trivialleak.stderr.exp2 \
+ 	unit_libcbase.stderr.exp unit_libcbase.vgtest \
+ 	unit_oset.stderr.exp unit_oset.stdout.exp unit_oset.vgtest \
+@@ -288,6 +289,7 @@
+ 	supp_unknown supp1 supp2 suppfree \
+ 	test-plo \
+ 	trivialleak \
++	thread_alloca \
+ 	unit_libcbase unit_oset \
+ 	varinfo1 varinfo2 varinfo3 varinfo4 \
+ 	varinfo5 varinfo5so.so varinfo6 \
+@@ -322,6 +324,7 @@
+ 
+ err_disable3_LDADD 	= -lpthread
+ err_disable4_LDADD 	= -lpthread
++thread_alloca_LDADD     = -lpthread
+ 
+ error_counts_CFLAGS = $(AM_CFLAGS) @FLAG_W_NO_UNINITIALIZED@
+ 
+--- valgrind-3.8.1/memcheck/tests/Makefile.in.orig	2016-09-15 17:43:16.843436578 +0200
++++ valgrind-3.8.1/memcheck/tests/Makefile.in	2016-09-15 17:44:26.875309281 +0200
+@@ -110,14 +110,15 @@
+ 	sigprocmask$(EXEEXT) static_malloc$(EXEEXT) sigkill$(EXEEXT) \
+ 	strchr$(EXEEXT) str_tester$(EXEEXT) supp_unknown$(EXEEXT) \
+ 	supp1$(EXEEXT) supp2$(EXEEXT) suppfree$(EXEEXT) \
+-	test-plo$(EXEEXT) trivialleak$(EXEEXT) unit_libcbase$(EXEEXT) \
+-	unit_oset$(EXEEXT) varinfo1$(EXEEXT) varinfo2$(EXEEXT) \
+-	varinfo3$(EXEEXT) varinfo4$(EXEEXT) varinfo5$(EXEEXT) \
+-	varinfo5so.so$(EXEEXT) varinfo6$(EXEEXT) vcpu_fbench$(EXEEXT) \
+-	vcpu_fnfns$(EXEEXT) wcs$(EXEEXT) xml1$(EXEEXT) wrap1$(EXEEXT) \
+-	wrap2$(EXEEXT) wrap3$(EXEEXT) wrap4$(EXEEXT) wrap5$(EXEEXT) \
+-	wrap6$(EXEEXT) wrap7$(EXEEXT) wrap7so.so$(EXEEXT) \
+-	wrap8$(EXEEXT) writev1$(EXEEXT) $(am__EXEEXT_1)
++	test-plo$(EXEEXT) trivialleak$(EXEEXT) thread_alloca$(EXEEXT) \
++	unit_libcbase$(EXEEXT) unit_oset$(EXEEXT) varinfo1$(EXEEXT) \
++	varinfo2$(EXEEXT) varinfo3$(EXEEXT) varinfo4$(EXEEXT) \
++	varinfo5$(EXEEXT) varinfo5so.so$(EXEEXT) varinfo6$(EXEEXT) \
++	vcpu_fbench$(EXEEXT) vcpu_fnfns$(EXEEXT) wcs$(EXEEXT) \
++	xml1$(EXEEXT) wrap1$(EXEEXT) wrap2$(EXEEXT) wrap3$(EXEEXT) \
++	wrap4$(EXEEXT) wrap5$(EXEEXT) wrap6$(EXEEXT) wrap7$(EXEEXT) \
++	wrap7so.so$(EXEEXT) wrap8$(EXEEXT) writev1$(EXEEXT) \
++	$(am__EXEEXT_1)
+ @DWARF4_TRUE@am__append_12 = dw4
+ subdir = memcheck/tests
+ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
+@@ -477,6 +478,9 @@
+ test_plo_SOURCES = test-plo.c
+ test_plo_OBJECTS = test-plo.$(OBJEXT)
+ test_plo_LDADD = $(LDADD)
++thread_alloca_SOURCES = thread_alloca.c
++thread_alloca_OBJECTS = thread_alloca.$(OBJEXT)
++thread_alloca_DEPENDENCIES =
+ trivialleak_SOURCES = trivialleak.c
+ trivialleak_OBJECTS = trivialleak.$(OBJEXT)
+ trivialleak_LDADD = $(LDADD)
+@@ -610,12 +614,12 @@
+ 	sh-mem-random.c sigaltstack.c sigkill.c signal2.c \
+ 	sigprocmask.c static_malloc.c str_tester.c strchr.c \
+ 	$(supp1_SOURCES) $(supp2_SOURCES) $(supp_unknown_SOURCES) \
+-	suppfree.c test-plo.c trivialleak.c unit_libcbase.c \
+-	unit_oset.c varinfo1.c varinfo2.c varinfo3.c varinfo4.c \
+-	$(varinfo5_SOURCES) $(varinfo5so_so_SOURCES) varinfo6.c \
+-	vcpu_fbench.c vcpu_fnfns.c wcs.c wrap1.c wrap2.c wrap3.c \
+-	wrap4.c wrap5.c wrap6.c $(wrap7_SOURCES) $(wrap7so_so_SOURCES) \
+-	wrap8.c writev1.c xml1.c
++	suppfree.c test-plo.c thread_alloca.c trivialleak.c \
++	unit_libcbase.c unit_oset.c varinfo1.c varinfo2.c varinfo3.c \
++	varinfo4.c $(varinfo5_SOURCES) $(varinfo5so_so_SOURCES) \
++	varinfo6.c vcpu_fbench.c vcpu_fnfns.c wcs.c wrap1.c wrap2.c \
++	wrap3.c wrap4.c wrap5.c wrap6.c $(wrap7_SOURCES) \
++	$(wrap7so_so_SOURCES) wrap8.c writev1.c xml1.c
+ DIST_SOURCES = accounting.c addressable.c atomic_incs.c badaddrvalue.c \
+ 	badfree.c badjump.c badjump2.c badloop.c badpoll.c badrw.c \
+ 	big_blocks_freed_list.c brk2.c buflen_check.c bug287260.c \
+@@ -641,12 +645,12 @@
+ 	sh-mem-random.c sigaltstack.c sigkill.c signal2.c \
+ 	sigprocmask.c static_malloc.c str_tester.c strchr.c \
+ 	$(supp1_SOURCES) $(supp2_SOURCES) $(supp_unknown_SOURCES) \
+-	suppfree.c test-plo.c trivialleak.c unit_libcbase.c \
+-	unit_oset.c varinfo1.c varinfo2.c varinfo3.c varinfo4.c \
+-	$(varinfo5_SOURCES) $(varinfo5so_so_SOURCES) varinfo6.c \
+-	vcpu_fbench.c vcpu_fnfns.c wcs.c wrap1.c wrap2.c wrap3.c \
+-	wrap4.c wrap5.c wrap6.c $(wrap7_SOURCES) $(wrap7so_so_SOURCES) \
+-	wrap8.c writev1.c xml1.c
++	suppfree.c test-plo.c thread_alloca.c trivialleak.c \
++	unit_libcbase.c unit_oset.c varinfo1.c varinfo2.c varinfo3.c \
++	varinfo4.c $(varinfo5_SOURCES) $(varinfo5so_so_SOURCES) \
++	varinfo6.c vcpu_fbench.c vcpu_fnfns.c wcs.c wrap1.c wrap2.c \
++	wrap3.c wrap4.c wrap5.c wrap6.c $(wrap7_SOURCES) \
++	$(wrap7so_so_SOURCES) wrap8.c writev1.c xml1.c
+ RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
+ 	html-recursive info-recursive install-data-recursive \
+ 	install-dvi-recursive install-exec-recursive \
+@@ -1132,6 +1136,7 @@
+ 	test-plo-yes.vgtest test-plo-yes.stdout.exp \
+ 	    test-plo-yes.stderr.exp-le64 test-plo-yes.stderr.exp-le32 \
+ 	    test-plo-no.stderr.exp-s390x-mvc \
++	thread_alloca.stderr.exp thread_alloca.vgtest \
+ 	trivialleak.stderr.exp trivialleak.vgtest trivialleak.stderr.exp2 \
+ 	unit_libcbase.stderr.exp unit_libcbase.vgtest \
+ 	unit_oset.stderr.exp unit_oset.stdout.exp unit_oset.vgtest \
+@@ -1168,6 +1173,7 @@
+ dw4_CFLAGS = $(AM_CFLAGS) -gdwarf-4 -fdebug-types-section
+ err_disable3_LDADD = -lpthread
+ err_disable4_LDADD = -lpthread
++thread_alloca_LDADD = -lpthread
+ error_counts_CFLAGS = $(AM_CFLAGS) @FLAG_W_NO_UNINITIALIZED@
+ execve1_CFLAGS = $(AM_CFLAGS) @FLAG_W_NO_NONNULL@
+ execve2_CFLAGS = $(AM_CFLAGS) @FLAG_W_NO_NONNULL@
+@@ -1597,6 +1603,9 @@
+ test-plo$(EXEEXT): $(test_plo_OBJECTS) $(test_plo_DEPENDENCIES) 
+ 	@rm -f test-plo$(EXEEXT)
+ 	$(LINK) $(test_plo_OBJECTS) $(test_plo_LDADD) $(LIBS)
++thread_alloca$(EXEEXT): $(thread_alloca_OBJECTS) $(thread_alloca_DEPENDENCIES) 
++	@rm -f thread_alloca$(EXEEXT)
++	$(LINK) $(thread_alloca_OBJECTS) $(thread_alloca_LDADD) $(LIBS)
+ trivialleak$(EXEEXT): $(trivialleak_OBJECTS) $(trivialleak_DEPENDENCIES) 
+ 	@rm -f trivialleak$(EXEEXT)
+ 	$(LINK) $(trivialleak_OBJECTS) $(trivialleak_LDADD) $(LIBS)
+@@ -1779,6 +1788,7 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/supp.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/suppfree.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-plo.Po@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/thread_alloca.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trivialleak.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/unit_libcbase.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/unit_oset.Po@am__quote@

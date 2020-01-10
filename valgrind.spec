@@ -3,7 +3,7 @@
 Summary: Tool for finding memory management bugs in programs
 Name: %{?scl_prefix}valgrind
 Version: 3.8.1
-Release: 8%{?dist}
+Release: 9%{?dist}
 Epoch: 1
 License: GPLv2
 URL: http://www.valgrind.org/
@@ -173,6 +173,9 @@ Patch44: valgrind-3.8.1-ppc64-priority.patch
 # KDE#333666 - Recognize MPX instructions and bnd prefix.
 Patch45: valgrind-3.8.1-mpx.patch
 
+# KDE#321960 - pthread_create then alloca causing invalid stack write errors
+Patch46: valgrind-3.8.1-pthread-alloca.patch
+
 Obsoletes: valgrind-callgrind
 %ifarch x86_64 ppc64
 # Ensure glibc{,-devel} is installed for both multilib arches
@@ -318,6 +321,8 @@ touch ./none/tests/amd64/bmi.stderr.exp
 %patch43 -p1
 %patch44 -p1
 %patch45 -p1
+%patch46 -p1
+touch ./memcheck/tests/thread_alloca.stderr.exp
 
 # To suppress eventual automake warnings/errors
 rm -f gdbserver_tests/filter_gdb.orig
@@ -467,6 +472,9 @@ echo ===============END TESTING===============
 %endif
 
 %changelog
+* Thu Sep 15 2016 Mark Wielaard <mjw@redhat.com> - 3.8.1-9
+- Add valgrind-3.8.1-pthread-alloca.patch (#1304753)
+
 * Wed Feb 25 2015 Mark Wielaard <mjw@redhat.com> - 3.8.1-8
 - Add valgrind-3.8.1-mpx.patch (#1196273)
 
@@ -631,7 +639,7 @@ echo ===============END TESTING===============
 * Mon Mar  9 2009 Jakub Jelinek <jakub@redhat.com> 3.4.1-1
 - update to 3.4.1
 
-* Tue Feb  9 2009 Jakub Jelinek <jakub@redhat.com> 3.4.0-3
+* Mon Feb  9 2009 Jakub Jelinek <jakub@redhat.com> 3.4.0-3
 - update to 3.4.0
 
 * Wed Apr 16 2008 Jakub Jelinek <jakub@redhat.com> 3.3.0-3
