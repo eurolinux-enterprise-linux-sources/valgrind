@@ -3,7 +3,7 @@
 Summary: Tool for finding memory management bugs in programs
 Name: %{?scl_prefix}valgrind
 Version: 3.12.0
-Release: 8%{?dist}
+Release: 9%{?dist}
 Epoch: 1
 License: GPLv2+
 URL: http://www.valgrind.org/
@@ -132,6 +132,12 @@ Patch19: valgrind-3.12.0-powerpc-register-pair.patch
 
 # KDE#377478 PPC64: ISA 3.0 setup fixes
 Patch20: valgrind-3.12.0-ppc64-isa-3_00.patch
+
+# KDE#369459 valgrind on arm64 violates the ARMv8 spec (ldxr/stxr)
+Patch21: valgrind-3.12.0-ll-sc-fallback1.patch
+Patch22: valgrind-3.12.0-ll-sc-fallback2.patch
+Patch23: valgrind-3.12.0-ll-sc-fallback3.patch
+Patch24: valgrind-3.12.0-ll-sc-fallback4.patch
 
 # RHEL7 specific patches.
 
@@ -270,6 +276,12 @@ Valgrind User Manual for details.
 %patch18 -p1
 %patch19 -p1
 %patch20 -p1
+%patch21 -p1
+%patch22 -p1
+%patch23 -p1
+%patch24 -p1
+# Remove patch artifacts from tests to pacify makefile consistency checker.
+rm -f none/tests/cmdline?.stdout.exp.orig
 
 # RHEL7 specific patches
 %patch7001 -p1
@@ -467,7 +479,10 @@ echo ===============END TESTING===============
 %endif
 
 %changelog
-* Tue Mar 28 2017 Mark Wielaard <mjw@redhat.com>
+* Thu Sep 21 2017 Mark Wielaard <mjw@redhat.com> - 3.12.0-9
+- Add valgrind-3.12.0-ll-sc-fallback[1234].patch (#1492753)
+
+* Tue Mar 28 2017 Mark Wielaard <mjw@redhat.com> - 3.12.0-8
 - Add valgrind-3.12.0-powerpc-register-pair.patch (#1437030)
 - Add valgrind-3.12.0-ppc64-isa-3_00.patch (#1437032)
 
