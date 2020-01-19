@@ -3,7 +3,7 @@
 Summary: Tool for finding memory management bugs in programs
 Name: %{?scl_prefix}valgrind
 Version: 3.13.0
-Release: 10%{?dist}
+Release: 13%{?dist}
 Epoch: 1
 License: GPLv2+
 URL: http://www.valgrind.org/
@@ -39,15 +39,23 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
   %endif
 %endif
 
-# Note s390x doesn't have an openmpi port available.
-# We never want the openmpi subpackage when building a software collecton
+# We never want the openmpi subpackage when building a software collecton.
+# We always want it for fedora.
+# We only want it for older rhel.
 %if %{is_scl}
   %global build_openmpi 0
 %else
-  %ifarch %{ix86} x86_64 ppc ppc64 ppc64le %{arm} aarch64
+  %if 0%{?fedora}
     %global build_openmpi 1
-  %else
-    %global build_openmpi 0
+  %endif
+  %if 0%{?rhel}
+    # We only ever build for these architectures. Historically s390x
+    # didn't have an openmpi implementation.
+    %ifarch %{ix86} x86_64 ppc ppc64 ppc64le %{arm} aarch64
+      %global build_openmpi 1
+    %else
+      %global build_openmpi 0
+    %endif
   %endif
 %endif
 
@@ -147,6 +155,21 @@ Patch16: valgrind-3.13.0-static-tls.patch
 # KDE#386397 PPC64 valgrind truncates powerpc timebase to 32-bits.
 Patch17: valgrind-3.13.0-ppc64-timebase.patch
 
+# KDE#387773 - Files in .gnu_debugaltlink should be resolved relative to .debug
+Patch18: valgrind-3.13.0-debug-alt-file.patch
+
+# KDE#387712 s390x cgijnl reports Conditional jump depends on uninit value
+Patch19: valgrind-3.13.0-s390-cgijnl.patch
+
+# KDE#391164 constraint bug in tests/ppc64/test_isa_2_07_part1.c for mtfprwa
+Patch20: valgrind-3.13.0-ppc64-mtfprwa-constraint.patch
+
+# KDE#393062 Reading build-id ELF note "debuginfo reader: ensure_valid failed"
+Patch21: valgrind-3.13.0-build-id-phdrs.patch
+
+# KDE#368913 WARNING: unhandled arm64-linux syscall: 117 (ptrace)
+Patch22: valgrind-3.13.0-arm64-ptrace.patch
+
 # RHEL7 specific patches.
 
 # RHBZ#996927 Ignore PPC floating point phased out category.
@@ -154,6 +177,7 @@ Patch17: valgrind-3.13.0-ppc64-timebase.patch
 # public header under /usr/include/valgrind causing multilib problems.
 # The result would only be used for two test cases.
 Patch7001: valgrind-3.11.0-ppc-fppo.patch
+
 %if %{build_multilib}
 
 # Ensure glibc{,-devel} is installed for both multilib arches
@@ -286,6 +310,11 @@ Valgrind User Manual for details.
 %patch15 -p1
 %patch16 -p1
 %patch17 -p1
+%patch18 -p1
+%patch19 -p1
+%patch20 -p1
+%patch21 -p1
+%patch22 -p1
 
 # RHEL7 specific patches
 %patch7001 -p1
@@ -312,6 +341,10 @@ CC="gcc -B `pwd`/shared/libgcc/"
 %else
 %define mpiccpath %{!?scl:%{_libdir}}%{?scl:%{_root_libdir}}/openmpi/*/bin/mpicc
 %endif
+%else
+# We explicitly don't want the libmpi wrapper. So make sure that configure
+# doesn't pick some random mpi compiler that happens to be installed.
+%define mpiccpath /bin/false
 %endif
 
 # Filter out some flags that cause lots of valgrind test failures.
@@ -323,9 +356,7 @@ CC="gcc -B `pwd`/shared/libgcc/"
 %undefine _hardened_build
 OPTFLAGS="`echo " %{optflags} " | sed 's/ -m\(64\|3[21]\) / /g;s/ -fexceptions / /g;s/ -fstack-protector\([-a-z]*\) / / g;s/ -Wp,-D_FORTIFY_SOURCE=2 / /g;s/ -O2 / /g;s/ -mcpu=\([a-z0-9]\+\) / /g;s/^ //;s/ $//'`"
 %configure CC="$CC" CFLAGS="$OPTFLAGS" CXXFLAGS="$OPTFLAGS" \
-%if %{build_openmpi}
   --with-mpicc=%{mpiccpath} \
-%endif
   GDB=%{_bindir}/gdb
 
 make %{?_smp_mflags}
@@ -491,6 +522,20 @@ echo ===============END TESTING===============
 %endif
 
 %changelog
+* Thu Jun 21 2018 Mark Wielaard <mjw@redhat.com> - 3.13.0-13
+- Improved valgrind-3.13.0-arm64-hwcap.patch (#1593686)
+- Add valgrind-3.13.0-arm64-ptrace.patch (#1593682)
+
+* Tue Jun 12 2018 Mark Wielaard <mjw@redhat.com> - 3.13.0-12
+- Keep build_openmpi explicitly off for s390x (#1530219)
+
+* Tue Jun 12 2018 Mark Wielaard <mjw@redhat.com> - 3.13.0-11
+- Make building of libmpi wrapper explicit (#1530219)
+- Add valgrind-3.13.0-debug-alt-file.patch
+  and valgrind-3.13.0-build-id-phdrs.patch (#1589844)
+- Add valgrind-3.13.0-s390-cgijnl.patch (#1589848)
+- Add valgrind-3.13.0-ppc64-mtfprwa-constraint.patch (#1589852)
+
 * Thu Nov  2 2017 Mark Wielaard <mjw@redhat.com> - 3.13.0-10
 - Add valgrind-3.13.0-ppc64-timebase.patch (#1508148)
 
