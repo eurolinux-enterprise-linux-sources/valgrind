@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: VALGRIND
 .\"    Author: [see the "Author" section]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 06/15/2017
-.\"    Manual: Release 3.13.0
-.\"    Source: Release 3.13.0
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 10/09/2018
+.\"    Manual: Release 3.14.0
+.\"    Source: Release 3.14.0
 .\"  Language: English
 .\"
-.TH "VALGRIND" "1" "06/15/2017" "Release 3.13.0" "Release 3.13.0"
+.TH "VALGRIND" "1" "10/09/2018" "Release 3.14.0" "Release 3.14.0"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -394,6 +394,13 @@ When enabled, Valgrind stops reporting errors after 10,000,000 in total, or 1,00
 Specifies an alternative exit code to return if Valgrind reported any errors in the run\&. When set to the default value (zero), the return value from Valgrind will always be the return value of the process being simulated\&. When set to a nonzero value, that value is returned instead, if Valgrind detects any errors\&. This is useful for using Valgrind as part of an automated test suite, since it makes it easy to detect test cases for which Valgrind has reported errors, just by inspecting return codes\&.
 .RE
 .PP
+\fB\-\-exit\-on\-first\-error=<yes|no> [default: no] \fR
+.RS 4
+If this option is enabled, Valgrind exits on the first error\&. A nonzero exit value must be defined using
+\-\-error\-exitcode
+option\&. Useful if you are running regression tests or have some other automated test machinery\&.
+.RE
+.PP
 \fB\-\-error\-markers=<begin>,<end> [default: none]\fR
 .RS 4
 When errors are output as plain text (i\&.e\&. XML not used),
@@ -414,6 +421,14 @@ Enable/disable printing of illegal instruction diagnostics\&. Enabled by default
 is given\&. The default can always be explicitly overridden by giving this option\&.
 .sp
 When enabled, a warning message will be printed, along with some diagnostics, whenever an instruction is encountered that Valgrind cannot decode or translate, before the program is given a SIGILL signal\&. Often an illegal instruction indicates a bug in the program or missing support for the particular instruction in Valgrind\&. But some programs do deliberately try to execute an instruction that might be missing and trap the SIGILL signal to detect processor features\&. Using this flag makes it possible to avoid the diagnostic output that you would otherwise get in such cases\&.
+.RE
+.PP
+\fB\-\-keep\-debuginfo=<yes|no> [default: no] \fR
+.RS 4
+When enabled, keep ("archive") symbols and all other debuginfo for unloaded code\&. This allows saved stack traces to include file/line info for code that has been dlclose\*(Aqd (or similar)\&. Be careful with this, since it can lead to unbounded memory use for programs which repeatedly load and unload shared objects\&.
+.sp
+Some tools and some functionalities have only limited support for archived debug info\&. Memcheck fully supports it\&. Generally, tools that report errors can use archived debug info to show the error stack traces\&. The known limitations are: Helgrind\*(Aqs past access stack trace of a race condition is does not use archived debug info\&. Massif (and more generally the xtree Massif output format) does not make use of archived debug info\&. Only Memcheck has been (somewhat) tested with
+\fB\-\-keep\-debuginfo=yes\fR, so other tools may have unknown limitations\&.
 .RE
 .PP
 \fB\-\-show\-below\-main=<yes|no> [default: no] \fR
@@ -721,7 +736,7 @@ When set to
 Note that the overhead in cpu and memory to produce an xtree depends on the tool\&. The overhead in cpu is small for the value
 \fIallocs\fR, as the information needed to produce this report is maintained in any case by the tool\&. For massif and helgrind, specifying
 \fIfull\fR
-implies to capture a stack trace for each free operation, while normally these tools only capture an allocation stack trace\&. For memcheck, the cpu overhead for the value
+implies to capture a stack trace for each free operation, while normally these tools only capture an allocation stack trace\&. For Memcheck, the cpu overhead for the value
 \fIfull\fR
 is small, as this can only be used in combination with
 \fB\-\-keep\-stacktraces=alloc\-and\-free\fR
@@ -1002,7 +1017,7 @@ will always be printed in front of the inner debug logging lines\&.
 .IP \(bu 2.3
 .\}
 \fBno\-nptl\-pthread\-stackcache: \fR
-This hint is only relevant when running Valgrind on Linux\&.
+This hint is only relevant when running Valgrind on Linux; it is ignored on Solaris and Mac OS X\&.
 .sp
 The GNU glibc pthread library (\fBlibpthread\&.so\fR), which is used by pthread programs, maintains a cache of pthread stacks\&. When a pthread terminates, the memory used for the pthread stack and some thread local storage related data structure are not always directly released\&. This memory is kept in a cache (up to a certain size), and is re\-used if a new thread is started\&.
 .sp
@@ -1325,6 +1340,181 @@ Shared library of the dynamic (runtime) linker is excluded from searching for gl
 synonym)\&.
 .RE
 .RE
+.PP
+\fB\-\-progress\-interval=<number> [default: 0, meaning \*(Aqdisabled\*(Aq] \fR
+.RS 4
+This is an enhancement to Valgrind\*(Aqs debugging output\&. It is unlikely to be of interest to end users\&.
+.sp
+When
+\fInumber\fR
+is set to a non\-zero value, Valgrind will print a one\-line progress summary every
+\fInumber\fR
+seconds\&. Valid settings for
+\fInumber\fR
+are between 0 and 3600 inclusive\&. Here\*(Aqs some example output with
+\fInumber\fR
+set to 10:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+PROGRESS: U 110s, W 113s, 97\&.3% CPU, EvC 414\&.79M, TIn 616\&.7k, TOut 0\&.5k, #thr 67
+PROGRESS: U 120s, W 124s, 96\&.8% CPU, EvC 505\&.27M, TIn 636\&.6k, TOut 3\&.0k, #thr 64
+PROGRESS: U 130s, W 134s, 97\&.0% CPU, EvC 574\&.90M, TIn 657\&.5k, TOut 3\&.0k, #thr 63
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+Each line shows:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIU\fR: total user time.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIW\fR: total wallclock time.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fICPU\fR: overall average cpu use.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fIEvC\fR: number of event checks\&.  An event
+         check is a backwards branch in the simulated program, so this is a
+         measure of forward progress of the program.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fITIn\fR: number of code blocks instrumented
+          by the JIT.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fITOut\fR: number of instrumented code
+          blocks that have been thrown away.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fI#thr\fR: number of threads in the
+        program.RE
+.sp
+From the progress of these, it is possible to observe:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+when the program is compute bound (\fITIn\fR
+          rises slowly, \fIEvC\fR rises rapidly).RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+when the program is in a spinloop
+          (\fITIn\fR/\fITOut\fR
+          fixed, \fIEvC\fR rises rapidly).RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+when the program is JIT\-bound (\fITIn\fR
+          rises rapidly).RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+when the program is rapidly discarding code
+          (\fITOut\fR rises rapidly).RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+when the program is about to achieve some expected state
+          (\fIEvC\fR arrives at some value you
+          expect).RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+ when the program is idling (\fIU\fR rises
+          more slowly than \fIW\fR).RE
+.sp
+.RE
 .SH "DEBUGGING VALGRIND OPTIONS"
 .PP
 There are also some options for debugging Valgrind itself\&. You shouldn\*(Aqt need to use them in the normal run of things\&. If you wish to see the list, use the
@@ -1623,7 +1813,7 @@ If set to yes, the results for the leak search done at exit will be output in a 
 : Definitely lost Blocks
 .RE
 .sp
-The increase or decrease for all events above will also be output in the file to provide the delta (increase or decreaseà between 2 successive leak searches\&. For example,
+The increase or decrease for all events above will also be output in the file to provide the delta (increase or decrease) between 2 successive leak searches\&. For example,
 \fBiRB\fR
 is the increase of the
 \fBRB\fR
@@ -1659,7 +1849,8 @@ for a detailed explanation about execution trees formats\&.
 .RS 4
 Controls whether Memcheck reports uses of undefined value errors\&. Set this to
 \fIno\fR
-if you don\*(Aqt want to see undefined value errors\&. It also has the side effect of speeding up Memcheck somewhat\&.
+if you don\*(Aqt want to see undefined value errors\&. It also has the side effect of speeding up Memcheck somewhat\&. AddrCheck (removed in Valgrind 3\&.1\&.0) functioned like Memcheck with
+\fB\-\-undef\-value\-errors=no\fR\&.
 .RE
 .PP
 \fB\-\-track\-origins=<yes|no> [default: no] \fR
@@ -1694,11 +1885,22 @@ When
 Note that code that behaves in this way is in violation of the ISO C/C++ standards, and should be considered broken\&. If at all possible, such code should be fixed\&.
 .RE
 .PP
-\fB\-\-expensive\-definedness\-checks=<yes|no> [default: no] \fR
+\fB\-\-expensive\-definedness\-checks=<no|auto|yes> [default: auto] \fR
 .RS 4
-Controls whether Memcheck should employ more precise but also more expensive (time consuming) algorithms when checking the definedness of a value\&. The default setting is not to do that and it is usually sufficient\&. However, for highly optimised code valgrind may sometimes incorrectly complain\&. Invoking valgrind with
+Controls whether Memcheck should employ more precise but also more expensive (time consuming) instrumentation when checking the definedness of certain values\&. In particular, this affects the instrumentation of integer adds, subtracts and equality comparisons\&.
+.sp
+Selecting
 \fB\-\-expensive\-definedness\-checks=yes\fR
-helps but comes at a performance cost\&. Runtime degradation of 25% have been observed but the extra cost depends a lot on the application at hand\&.
+causes Memcheck to use the most accurate analysis possible\&. This minimises false error rates but can cause up to 30% performance degradation\&.
+.sp
+Selecting
+\fB\-\-expensive\-definedness\-checks=no\fR
+causes Memcheck to use the cheapest instrumentation possible\&. This maximises performance but will normally give an unusably high false error rate\&.
+.sp
+The default setting,
+\fB\-\-expensive\-definedness\-checks=auto\fR, is strongly recommended\&. This causes Memcheck to use the minimum of expensive instrumentation needed to achieve the same false error rate as
+\fB\-\-expensive\-definedness\-checks=yes\fR\&. It also enables an instrumentation\-time analysis pass which aims to further reduce the costs of accurate instrumentation\&. Overall, the performance loss is generally around 5% relative to
+\fB\-\-expensive\-definedness\-checks=no\fR, although this is strongly workload dependent\&. Note that the exact instrumentation settings in this mode are architecture dependent\&.
 .RE
 .PP
 \fB\-\-keep\-stacktraces=alloc|free|alloc\-and\-free|alloc\-then\-free|none [default: alloc\-and\-free] \fR
@@ -2058,6 +2260,74 @@ provides a compromise between these two extremes\&. It causes Helgrind to show a
 \fB\-\-history\-level=full\fR
 does), but it is better than nothing, and it is almost as fast as
 \fB\-\-history\-level=none\fR\&.
+.RE
+.PP
+\fB\-\-delta\-stacktrace=no|yes [default: yes on linux amd64/x86] \fR
+.RS 4
+This flag only has any effect at
+\fB\-\-history\-level=full\fR\&.
+.sp
+\fB\-\-delta\-stacktrace\fR
+configures the way Helgrind captures the stacktraces for the option
+\fB\-\-history\-level=full\fR\&. Such a stacktrace is typically needed each time a new piece of memory is read or written in a basic block of instructions\&.
+.sp
+\fB\-\-delta\-stacktrace=no\fR
+causes Helgrind to compute a full history stacktrace from the unwind info each time a stacktrace is needed\&.
+.sp
+\fB\-\-delta\-stacktrace=yes\fR
+indicates to Helgrind to derive a new stacktrace from the previous stacktrace, as long as there was no call instruction, no return instruction, or any other instruction changing the call stack since the previous stacktrace was captured\&. If no such instruction was executed, the new stacktrace can be derived from the previous stacktrace by just changing the top frame to the current program counter\&. This option can speed up Helgrind by 25% when using
+\fB\-\-history\-level=full\fR\&.
+.sp
+The following aspects have to be considered when using
+\fB\-\-delta\-stacktrace=yes\fR
+:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+In some cases (for example in a function prologue), the
+            valgrind unwinder might not properly unwind the stack, due to some
+            limitations and/or due to wrong unwind info\&. When using
+            \-\-delta\-stacktrace=yes, the wrong stack trace captured in the
+            function prologue will be kept till the next call or return\&.
+          .RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+On the other hand, \-\-delta\-stacktrace=yes sometimes helps to
+            obtain a correct stacktrace, for example when the unwind info allows
+            a correct stacktrace to be done in the beginning of the sequence,
+            but not later on in the instruction sequence\&..RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Determining which instructions are changing the callstack is
+            partially based on platform dependent heuristics, which have to be
+            tuned/validated specifically for the platform\&. Also, unwinding in a
+            function prologue must be good enough to allow using
+            \-\-delta\-stacktrace=yes\&. Currently, the option \-\-delta\-stacktrace=yes
+            has been reasonably validated only on linux x86 32 bits and linux
+            amd64 64 bits\&. For more details about how to validate
+            \-\-delta\-stacktrace=yes, see debug option \-\-hg\-sanity\-flags and the
+            function check_cached_rcec_ok in libhb_core\&.c\&..RE
+.sp
 .RE
 .PP
 \fB\-\-conflict\-cache\-size=N [default: 1000000] \fR

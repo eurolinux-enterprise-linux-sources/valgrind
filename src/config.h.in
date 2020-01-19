@@ -12,6 +12,9 @@
 /* DARWIN_VERS value for macOS 10.12 */
 #undef DARWIN_10_12
 
+/* DARWIN_VERS value for macOS 10.13 */
+#undef DARWIN_10_13
+
 /* DARWIN_VERS value for Mac OS X 10.5 */
 #undef DARWIN_10_5
 
@@ -38,6 +41,9 @@
 
 /* configured to run as an inner Valgrind */
 #undef ENABLE_INNER
+
+/* configured to build with lto link time optimisation */
+#undef ENABLE_LTO
 
 /* path to GDB */
 #undef GDB_PATH

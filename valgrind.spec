@@ -2,8 +2,8 @@
 
 Summary: Tool for finding memory management bugs in programs
 Name: %{?scl_prefix}valgrind
-Version: 3.13.0
-Release: 13%{?dist}
+Version: 3.14.0
+Release: 16%{?dist}
 Epoch: 1
 License: GPLv2+
 URL: http://www.valgrind.org/
@@ -60,26 +60,23 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 %endif
 
 # Whether to run the full regtest or only a limited set
-# The full regtest includes gdb_server integration tests.
-# On arm the gdb integration tests hang for unknown reasons.
-# On rhel6 the gdb_server tests hang.
-# On rhel7 they hang on ppc64 and ppc64le.
-%ifarch %{arm}
-  %global run_full_regtest 0
-%else
-  %if 0%{?rhel} == 6
+# The full regtest includes gdb_server integration tests
+# and experimental tools.
+# Only run full regtests on x86_64, but not on older rhel
+# or when creating scl, the gdb_server tests might hang.
+%ifarch x86_64
+  %if %{is_scl}
     %global run_full_regtest 0
   %else
-    %if 0%{?rhel} == 7
-      %ifarch ppc64 ppc64le
-        %global run_full_regtest 0
-      %else
-        %global run_full_regtest 1
-      %endif
-    %else
+    %if 0%{?fedora}
       %global run_full_regtest 1
     %endif
+    %if 0%{?rhel}
+      %global run_full_regtest (%rhel >= 7)
+    %endif
   %endif
+%else
+  %global run_full_regtest 0
 %endif
 
 # Generating minisymtabs doesn't really work for the staticly linked
@@ -100,77 +97,89 @@ Patch2: valgrind-3.9.0-helgrind-race-supp.patch
 # Make ld.so supressions slightly less specific.
 Patch3: valgrind-3.9.0-ldso-supp.patch
 
-# KDE#381272  ppc64 doesn't compile test_isa_2_06_partx.c without VSX support
-Patch4: valgrind-3.13.0-ppc64-check-no-vsx.patch
+# KDE#400490 s390x: Fix register allocation for VRs vs FPRs
+Patch4: valgrind-3.14.0-s390x-fix-reg-alloc-vr-vs-fpr.patch
 
-# KDE#381289 epoll_pwait can have a NULL sigmask.
-Patch5: valgrind-3.13.0-epoll_pwait.patch
+# KDE#400491 s390x: Sign-extend immediate operand of LOCHI and friends
+Patch5: valgrind-3.14.0-s390x-sign-extend-lochi.patch
 
-# KDE#381274 powerpc too chatty even with --sigill-diagnostics=no
-Patch6: valgrind-3.13.0-ppc64-diag.patch
+# KDE#397187 s390x: Add vector register support for vgdb
+Patch6: valgrind-3.14.0-s390x-vec-reg-vgdb.patch
 
-# KDE#381556 arm64: Handle feature registers access on 4.11 Linux kernel
-# Workaround that masks CPUID support in HWCAP on aarch64 (#1464211)
-Patch7: valgrind-3.13.0-arm64-hwcap.patch
+# KDE#385411 s390x: z13 vector floating-point instructions not implemented
+Patch7: valgrind-3.14.0-s390x-vec-float-point-code.patch
+Patch8: valgrind-3.14.0-s390x-vec-float-point-tests.patch
 
-# RHBZ#1466017 ARM ld.so index warnings.
-# KDE#381805 arm32 needs ld.so index hardwire for new glibc security fixes
-Patch8: valgrind-3.13.0-arm-index-hardwire.patch
+# KDE#401277 More bugs in z13 support
+Patch9: valgrind-3.14.0-s390z-more-z13-fixes.patch
 
-# KDE#381769 Use ucontext_t instead of struct ucontext
-Patch9: valgrind-3.13.0-ucontext_t.patch
+# KDE#386945 Bogus memcheck errors on ppc64(le) when using strcmp
+Patch10: valgrind-3.14.0-get_otrack_shadow_offset_wrk-ppc.patch
+Patch11: valgrind-3.14.0-new-strlen-IROps.patch
+Patch12: valgrind-3.14.0-ppc-instr-new-IROps.patch
+Patch13: valgrind-3.14.0-memcheck-new-IROps.patch
+Patch14: valgrind-3.14.0-ppc-frontend-new-IROps.patch
+Patch15: valgrind-3.14.0-transform-popcount64-ctznat64.patch
+Patch16: valgrind-3.14.0-enable-ppc-Iop_Sar_Shr8.patch
 
-# valgrind svn r16453 Fix some tests failure with GDB 8.0
-Patch10: valgrind-3.13.0-gdb-8-testfix.patch
+# KDE#401627 memcheck errors with glibc avx2 optimized wcsncmp
+Patch17: valgrind-3.14.0-wcsncmp.patch
 
-# valgrind svn r16454. disable vgdb poll in the child after fork
-Patch11: valgrind-3.13.0-disable-vgdb-child.patch
+# KDE#402006 mark helper regs defined in final_tidyup before freeres_wrapper
+# Prereq for KDE#386945
+Patch18: valgrind-3.14.0-final_tidyup.patch
 
-# KDE#382998 xml-socket doesn't work
-Patch12: valgrind-3.13.0-xml-socket.patch
+# KDE#386945 Bogus memcheck errors on ppc64(le) when using strcmp
+# See also patches 10 to 16 (yes, there are this many...)
+Patch19: valgrind-3.14.0-ppc64-ldbrx.patch
+Patch20: valgrind-3.14.0-ppc64-unaligned-words.patch
+Patch21: valgrind-3.14.0-ppc64-lxvd2x.patch
+Patch22: valgrind-3.14.0-ppc64-unaligned-vecs.patch
+Patch23: valgrind-3.14.0-ppc64-lxvb16x.patch
+Patch24: valgrind-3.14.0-set_AV_CR6.patch
+Patch25: valgrind-3.14.0-undef_malloc_args.patch
 
-# KDE#385334
-# PPC64, vpermr, xxperm, xxpermr fix Iop_Perm8x16 selector field
-# PPC64, revert the change to vperm instruction.
-# KDE#385183
-# PPC64, Add support for xscmpeqdp, xscmpgtdp, xscmpgedp, xsmincdp instructions
-# PPC64, Fix bug in vperm instruction.
-# KDE#385210
-# PPC64, Re-implement the vpermr instruction using the Iop_Perm8x16.
-# KDE#385208
-# PPC64, Use the vperm code to implement the xxperm inst.
-# PPC64, Replace body of generate_store_FPRF with C helper function.
-# PPC64, Add support for the Data Stream Control Register (DSCR)
-Patch13: valgrind-3.13.0-ppc64-vex-fixes.patch
+# KDE#401822 none/tests/ppc64/jm-vmx fails and produces assembler warnings
+Patch26: valgrind-3.14.0-jm-vmx-constraints.patch
 
-# Fix eflags handling in amd64 instruction tests
-Patch14: valgrind-3.13.0-amd64-eflags-tests.patch
+# commit 0c701ba2a Fix sigkill.stderr.exp for glibc-2.28.
+Patch27: valgrind-3.14.0-sigkill.patch
 
-# KDE#385868 ld.so _dl_runtime_resolve_avx_slow conditional jump warning
-Patch15: valgrind-3.13.0-suppress-dl-trampoline-sse-avx.patch
+# KDE#402048 Implement minimal ptrace support for ppc64[le]-linux.
+Patch28: valgrind-3.14.0-ppc64-ptrace.patch
 
-# Implement static TLS code for more platforms
-Patch16: valgrind-3.13.0-static-tls.patch
+# commit 43fe4bc23 arm64: Fix PTRACE_TRACEME
+Patch29: valgrind-3.14.0-arm64-ptrace-traceme.patch
 
-# KDE#386397 PPC64 valgrind truncates powerpc timebase to 32-bits.
-Patch17: valgrind-3.13.0-ppc64-timebase.patch
+# KDE#402134 - assert fail mc_translate.c (noteTmpUsesIn) Iex_VECRET on arm64
+Patch30: valgrind-3.14.0-mc_translate-vecret.patch
 
-# KDE#387773 - Files in .gnu_debugaltlink should be resolved relative to .debug
-Patch18: valgrind-3.13.0-debug-alt-file.patch
+# KDE#402481 vbit-test fails on x86 for Iop_CmpEQ64 iselInt64Expr Sar64
+Patch31: valgrind-3.14.0-vbit-test-sec.patch
+Patch32: valgrind-3.14.0-x86-Iop_Sar64.patch
 
-# KDE#387712 s390x cgijnl reports Conditional jump depends on uninit value
-Patch19: valgrind-3.13.0-s390-cgijnl.patch
+# KDE#402519 POWER 3.0 addex instruction incorrectly implemented
+Patch33: valgrind-3.14.0-power9-addex.patch
 
-# KDE#391164 constraint bug in tests/ppc64/test_isa_2_07_part1.c for mtfprwa
-Patch20: valgrind-3.13.0-ppc64-mtfprwa-constraint.patch
+# KDE#402480  Do not use %rsp in clobber list
+Patch34: valgrind-3.14.0-rsp-clobber.patch
 
-# KDE#393062 Reading build-id ELF note "debuginfo reader: ensure_valid failed"
-Patch21: valgrind-3.13.0-build-id-phdrs.patch
+# commit 3528f8 Accept DW_TAG_subrange_type with DW_AT_count
+Patch35: valgrind-3.14.0-subrange_type-count.patch
 
-# KDE#368913 WARNING: unhandled arm64-linux syscall: 117 (ptrace)
-Patch22: valgrind-3.13.0-arm64-ptrace.patch
 
-# RHEL7 specific patches.
+# KDE#403552 s390x: wrong facility bit checked for vector facility
+Patch36: valgrind-3.14.0-s390x-vec-facility-bit.patch
+
+# KDE#404054 powerpc subfe x, x, x initializes x to 0 or -1 based on CA
+Patch37: valgrind-3.14.0-ppc-subfe.patch
+
+# KDE#405079 unhandled ppc64le-linux syscall: 131 (quotactl)
+Patch38: valgrind-3.14.0-ppc64-quotactl.patch
+
+# SW#6399 glibc might implement gettid itself, rename to gettid_sys.
+Patch39: valgrind-3.14.0-gettid.patch
+
 
 # RHBZ#996927 Ignore PPC floating point phased out category.
 # The result might differ on ppc vs ppc64 and config.h ends up as
@@ -178,8 +187,8 @@ Patch22: valgrind-3.13.0-arm64-ptrace.patch
 # The result would only be used for two test cases.
 Patch7001: valgrind-3.11.0-ppc-fppo.patch
 
-%if %{build_multilib}
 
+%if %{build_multilib}
 # Ensure glibc{,-devel} is installed for both multilib arches
 BuildRequires: /lib/libc.so.6 /usr/lib/libc.so /lib64/libc.so.6 /usr/lib64/libc.so
 %endif
@@ -198,12 +207,9 @@ BuildRequires: glibc-devel >= 2.5
 BuildRequires: openmpi-devel >= 1.3.3
 %endif
 
-# For %%build and %%check.
-# In case of a software collection, pick the matching gdb and binutils.
 %if %{run_full_regtest}
-BuildRequires: %{?scl_prefix}gdb
+BuildRequires: gdb
 %endif
-BuildRequires: %{?scl_prefix}binutils
 
 # gdbserver_tests/filter_make_empty uses ps in test
 BuildRequires: procps
@@ -219,6 +225,15 @@ BuildRequires: perl(Getopt::Long)
 
 %{?scl:Requires:%scl_runtime}
 
+# We need to fixup selinux file context when doing a scl build.
+# In RHEL6 we might need to fix up the labels even though the
+# meta package sets up a fs equivalence. See post.
+%if 0%{?rhel} == 6
+%{?scl:Requires(post): /sbin/restorecon}
+%endif
+
+# Explicit list, should use valgrind_arches from redhat-rpm-config
+# but that currently doesn't include s390x (z13 support is not complete).
 ExclusiveArch: %{ix86} x86_64 ppc ppc64 ppc64le s390x armv7hl aarch64
 %ifarch %{ix86}
 %define valarch x86
@@ -315,16 +330,30 @@ Valgrind User Manual for details.
 %patch20 -p1
 %patch21 -p1
 %patch22 -p1
+%patch23 -p1
+%patch24 -p1
+%patch25 -p1
+%patch26 -p1
+%patch27 -p1
+%patch28 -p1
+%patch29 -p1
+%patch30 -p1
+%patch31 -p1
+%patch32 -p1
+%patch33 -p1
+%patch34 -p1
+%patch35 -p1
+%patch36 -p1
+%patch37 -p1
+%patch38 -p1
+%patch39 -p1
+
 
 # RHEL7 specific patches
 %patch7001 -p1
 
-%build
-# We need to use the software collection compiler and binutils if available.
-# The configure checks might otherwise miss support for various newer
-# assembler instructions.
-%{?scl:PATH=%{_bindir}${PATH:+:${PATH}}}
 
+%build
 CC=gcc
 %if %{build_multilib}
 # Ugly hack - libgcc 32-bit package might not be installed
@@ -352,8 +381,11 @@ CC="gcc -B `pwd`/shared/libgcc/"
 # not for tests which should be -O0, as they aren't meant to be
 # compiled with -O2 unless explicitely requested. Same for any -mcpu flag.
 # Ideally we will change this to only be done for the non-primary build
-# and the test suite.
+# and the test suite. Also disable strict symbol checks because the
+# vg_preload library will use hidden/undefined symbols from glibc
+# like __libc_freeres.
 %undefine _hardened_build
+%undefine _strict_symbol_defs_build
 OPTFLAGS="`echo " %{optflags} " | sed 's/ -m\(64\|3[21]\) / /g;s/ -fexceptions / /g;s/ -fstack-protector\([-a-z]*\) / / g;s/ -Wp,-D_FORTIFY_SOURCE=2 / /g;s/ -O2 / /g;s/ -mcpu=\([a-z0-9]\+\) / /g;s/^ //;s/ $//'`"
 %configure CC="$CC" CFLAGS="$OPTFLAGS" CXXFLAGS="$OPTFLAGS" \
   --with-mpicc=%{mpiccpath} \
@@ -434,9 +466,9 @@ chmod 644 $RPM_BUILD_ROOT%{_libdir}/valgrind/vgpreload*-%{valarch}-*so
 # Add || true because rpm on copr EPEL6 acts weirdly and we don't want
 # to break the build.
 uname -a
-rpm -q glibc gcc %{?scl_prefix}binutils || true
+rpm -q glibc gcc binutils || true
 %if %{run_full_regtest}
-rpm -q %{?scl_prefix}gdb || true
+rpm -q gdb || true
 %endif
 
 LD_SHOW_AUXV=1 /bin/true
@@ -465,7 +497,7 @@ echo ===============TESTING===================
 # Make sure test failures show up in build.log
 # Gather up the diffs (at most the first 20 lines for each one)
 MAX_LINES=20
-diff_files=`find . -name '*.diff' | sort`
+diff_files=`find */tests -name '*.diff*' | sort`
 if [ z"$diff_files" = z ] ; then
    echo "Congratulations, all tests passed!" >> diffs
 else
@@ -522,6 +554,9 @@ echo ===============END TESTING===============
 %endif
 
 %changelog
+* Tue Mar  5 2019 Mark Wielaard <mjw@redhat.com> - 3.14.0-16
+- Rebase to 3.14.0 plus backports and z13 support (#1519410)
+
 * Thu Jun 21 2018 Mark Wielaard <mjw@redhat.com> - 3.13.0-13
 - Improved valgrind-3.13.0-arm64-hwcap.patch (#1593686)
 - Add valgrind-3.13.0-arm64-ptrace.patch (#1593682)

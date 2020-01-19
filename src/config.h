@@ -13,6 +13,9 @@
 /* DARWIN_VERS value for macOS 10.12 */
 /* #undef DARWIN_10_12 */
 
+/* DARWIN_VERS value for macOS 10.13 */
+/* #undef DARWIN_10_13 */
+
 /* DARWIN_VERS value for Mac OS X 10.5 */
 /* #undef DARWIN_10_5 */
 
@@ -39,6 +42,9 @@
 
 /* configured to run as an inner Valgrind */
 /* #undef ENABLE_INNER */
+
+/* configured to build with lto link time optimisation */
+/* #undef ENABLE_LTO */
 
 /* path to GDB */
 #define GDB_PATH "/usr/bin/gdb"
@@ -330,7 +336,7 @@
 #define PACKAGE_NAME "Valgrind"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Valgrind 3.13.0"
+#define PACKAGE_STRING "Valgrind 3.14.0"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "valgrind"
@@ -339,7 +345,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "3.13.0"
+#define PACKAGE_VERSION "3.14.0"
 
 /* Define to 1 if you have the `A_GETSTAT' and `A_SETSTAT' constants. */
 /* #undef SOLARIS_AUDITON_STAT */
@@ -453,7 +459,7 @@
 #define TIME_WITH_SYS_TIME 1
 
 /* Version number of package */
-#define VERSION "3.13.0"
+#define VERSION "3.14.0"
 
 /* Temporary files directory */
 #define VG_TMPDIR "/tmp"
